@@ -1,54 +1,98 @@
-# React + TypeScript + Vite
+# QA Platform Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The frontend implementation of the QA Platform, built with React, Vite, and TypeScript. Features a modern dark theme and interactive components for QA analysis.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Dark Theme**: Professional dark mode interface with custom color variables
+- **Interactive Components**:
+  - Star Rating System (0-5 stars)
+  - Agent & Sub-component Selection
+  - Dynamic Variable Forms
+  - Markdown Response Display
+- **Responsive Design**: Optimized for desktop workstations
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Core**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+- **Code Quality**: ESLint + TypeScript
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## Project Structure
+
+```
+src/
+├── components/           # Reusable UI components
+│   ├── AgentSelector    # Agent selection dropdown
+│   ├── QAResponse      # QA result display with ratings
+│   ├── ReportVariables # Dynamic variable form
+│   └── StarRating      # Interactive star rating
+├── App.tsx             # Main application component
+├── index.css          # Global styles and Tailwind
+└── main.tsx           # Application entry point
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Component Documentation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### QAResponse
+Displays the QA evaluation result with:
+- Metadata header (timestamp, ID)
+- Agent and sub-component info
+- Markdown-rendered LLM response {COMING SOON}
+- Dual star rating system for QA quality and report accuracy
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+### StarRating
+Interactive 5-star rating component with:
+- Hover effects
+- Click-to-rate functionality
+- Visual feedback
+- Accessibility features
+
+### ReportVariables
+Dynamic form generation based on component requirements:
+- Validates required fields
+- Supports multiple input types
+- Real-time validation
+
+### AgentSelector
+Two-level dropdown for agent and sub-component selection:
+- Contextual sub-component options
+- Clear visual hierarchy
+- Keyboard navigation support
+
+## Development
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start development server:
+   ```bash
+   npm run dev
+   ```
+
+3. Build for production:
+   ```bash
+   npm run build
+   ```
+
+## Style Guide
+
+- Follow the color system defined in `globals.css`
+- Use Tailwind classes for styling
+- Maintain dark theme consistency
+- Follow existing component patterns
+
+## Contributing
+
+1. Follow the established code style
+2. Maintain TypeScript type safety
+3. Test components before committing
+4. Update documentation as needed
+
+## License
+
+Proprietary - All rights reserved
