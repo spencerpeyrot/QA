@@ -24,7 +24,7 @@ A lean, local-first web application that enables analysts to QA components of Ag
 ### Backend
 - **API**: FastAPI with async support
 - **Database**: MongoDB with Motor (async driver)
-- **LLM Integration**: OpenAI API (gpt-4)
+- **LLM Integration**: OpenAI API (gpt-4-search)
 - **Runtime**: Python 3.12 + uvicorn
 
 ## Project Structure
