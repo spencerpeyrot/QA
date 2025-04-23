@@ -17,7 +17,7 @@ A lean, local-first web application that enables analysts to QA components of Ag
 - UI Kit: shadcn/ui + Tailwind
 - Backend: FastAPI + uvicorn
 - Database: MongoDB (local) using motor
-- LLM: OpenAI (gpt-4o-mini default)
+- LLM: OpenAI (gpt-4o-search)
 
 ## Getting Started
 
