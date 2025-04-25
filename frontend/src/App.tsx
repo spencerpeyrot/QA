@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ReportVariables } from './components/ReportVariables'
 import { QAResponse } from './components/QAResponse'
+import { Analytics } from './components/Analytics'
 import { qaApi } from './services/api'
 
 const AGENT_SUBCOMPONENTS = {
@@ -71,6 +72,7 @@ const TEST_QA_RUN: QARun = {
 };
 
 function App() {
+  const [selectedTab, setSelectedTab] = useState<'qa' | 'analytics'>('qa');
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [selectedSubComponent, setSelectedSubComponent] = useState<string>('');
   const [variables, setVariables] = useState<Record<string, string>>({});
@@ -164,7 +166,7 @@ function App() {
 
   const handleQARating = async (id: string, rating: number) => {
     try {
-      await qaApi.updateQAPass(id, rating >= 3);
+      await qaApi.updateQAPass(id, rating);
       if (qaRun && qaRun.id === id) {
         setQaRun({ ...qaRun, qa_rating: rating });
       }
@@ -175,7 +177,7 @@ function App() {
 
   const handleReportRating = async (id: string, rating: number) => {
     try {
-      await qaApi.updateReportPass(id, rating >= 3);
+      await qaApi.updateReportPass(id, rating);
       if (qaRun && qaRun.id === id) {
         setQaRun({ ...qaRun, report_rating: rating });
       }
@@ -211,154 +213,186 @@ function App() {
     <div className="min-h-screen bg-(--color-background)">
       <div className="p-6">
         <header className="mb-8">
-          <h1 className="font-owners text-3xl font-semibold text-(--color-foreground)">
+          <h1 className="font-owners text-3xl font-semibold text-(--color-foreground) mb-6">
             QA Platform
           </h1>
+          <div className="flex gap-4 border-b border-[#2A2E39]">
+            <button
+              className={`px-4 py-2 font-medium text-sm transition-colors relative ${
+                selectedTab === 'qa'
+                  ? 'text-(--color-accent)'
+                  : 'text-(--color-neutral-500) hover:text-(--color-neutral-100)'
+              }`}
+              onClick={() => setSelectedTab('qa')}
+            >
+              QA
+              {selectedTab === 'qa' && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
+              )}
+            </button>
+            <button
+              className={`px-4 py-2 font-medium text-sm transition-colors relative ${
+                selectedTab === 'analytics'
+                  ? 'text-(--color-accent)'
+                  : 'text-(--color-neutral-500) hover:text-(--color-neutral-100)'
+              }`}
+              onClick={() => setSelectedTab('analytics')}
+            >
+              Analytics
+              {selectedTab === 'analytics' && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
+              )}
+            </button>
+          </div>
         </header>
         
         <main className="space-y-6">
-          <div 
-            className="space-y-6 rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]"
-            style={{
-              backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
-              backgroundSize: '4px 4px'
-            }}
-          >
-            <div className="space-y-4 relative z-10">
-              <div className="flex items-center gap-4">
-                <label 
-                  htmlFor="agent" 
-                  className="w-24 font-medium text-(--color-neutral-100)"
-                >
-                  Agent:
-                </label>
-                <select 
-                  id="agent" 
-                  value={selectedAgent} 
-                  onChange={handleAgentChange}
-                  className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
-                >
-                  <option value="">Select an agent...</option>
-                  <option value="Agent S">Agent S</option>
-                  <option value="Agent M">Agent M</option>
-                  <option value="Agent Q">Agent Q</option>
-                  <option value="Agent O">Agent O</option>
-                  <option value="Agent E">Agent E</option>
-                  <option value="Ticker Dashboard">Ticker Dashboard</option>
-                </select>
+          {selectedTab === 'qa' ? (
+            <>
+              <div className="space-y-6 rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]"
+                style={{
+                  backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
+                  backgroundSize: '4px 4px'
+                }}
+              >
+                <div className="space-y-4 relative z-10">
+                  <div className="flex items-center gap-4">
+                    <label 
+                      htmlFor="agent" 
+                      className="w-24 font-medium text-(--color-neutral-100)"
+                    >
+                      Agent:
+                    </label>
+                    <select 
+                      id="agent" 
+                      value={selectedAgent} 
+                      onChange={handleAgentChange}
+                      className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
+                    >
+                      <option value="">Select an agent...</option>
+                      <option value="Agent S">Agent S</option>
+                      <option value="Agent M">Agent M</option>
+                      <option value="Agent Q">Agent Q</option>
+                      <option value="Agent O">Agent O</option>
+                      <option value="Agent E">Agent E</option>
+                      <option value="Ticker Dashboard">Ticker Dashboard</option>
+                    </select>
+                  </div>
+
+                  {selectedAgent && (
+                    <div 
+                      className="rounded-md px-4 py-3"
+                      style={{ backgroundColor: `${getAgentColor(selectedAgent)}20` }}
+                    >
+                      <p 
+                        className="text-sm font-medium"
+                        style={{ color: getAgentColor(selectedAgent) }}
+                      >
+                        Selected: Agent {selectedAgent}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {selectedAgent && AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].length > 0 && (
+                  <div className="flex items-center gap-4">
+                    <label 
+                      htmlFor="subcomponent"
+                      className="w-24 font-medium text-(--color-neutral-100)"
+                    >
+                      Sub-component:
+                    </label>
+                    <select
+                      id="subcomponent"
+                      value={selectedSubComponent}
+                      onChange={(e) => setSelectedSubComponent(e.target.value)}
+                      className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
+                    >
+                      <option value="">Select a sub-component...</option>
+                      {AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].map((subComponent) => (
+                        <option key={subComponent} value={subComponent}>
+                          {subComponent}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {selectedAgent && selectedSubComponent && (
+                  <div 
+                    className="rounded-md px-4 py-3"
+                    style={{ backgroundColor: `${getAgentColor(selectedAgent)}20` }}
+                  >
+                    <p 
+                      className="text-sm font-medium"
+                      style={{ color: getAgentColor(selectedAgent) }}
+                    >
+                      Selected: Agent {selectedAgent} → {selectedSubComponent}
+                    </p>
+                  </div>
+                )}
               </div>
 
+              {/* Report Variables Section */}
               {selectedAgent && (
-                <div 
-                  className="rounded-md px-4 py-3"
-                  style={{ backgroundColor: `${getAgentColor(selectedAgent)}20` }}
+                <div className="rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]"
+                  style={{
+                    backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
+                    backgroundSize: '4px 4px'
+                  }}
                 >
-                  <p 
-                    className="text-sm font-medium"
-                    style={{ color: getAgentColor(selectedAgent) }}
-                  >
-                    Selected: Agent {selectedAgent}
-                  </p>
+                  <div className="relative z-10">
+                    <ReportVariables
+                      agent={selectedAgent}
+                      subComponent={selectedSubComponent}
+                      onVariablesChange={handleVariablesChange}
+                    />
+                  </div>
                 </div>
               )}
-            </div>
 
-            {selectedAgent && AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].length > 0 && (
-              <div className="flex items-center gap-4">
-                <label 
-                  htmlFor="subcomponent"
-                  className="w-24 font-medium text-(--color-neutral-100)"
-                >
-                  Sub-component:
-                </label>
-                <select
-                  id="subcomponent"
-                  value={selectedSubComponent}
-                  onChange={(e) => setSelectedSubComponent(e.target.value)}
-                  className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
-                >
-                  <option value="">Select a sub-component...</option>
-                  {AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].map((subComponent) => (
-                    <option key={subComponent} value={subComponent}>
-                      {subComponent}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+              {/* Action Buttons */}
+              {selectedAgent && Object.keys(variables).length > 0 && (
+                <div className="flex justify-end gap-4">
+                  <button
+                    className="rounded-md bg-[#1a1d24] px-6 py-2 text-sm font-medium text-(--color-neutral-100) border border-[#2A2E39] hover:border-(--color-accent)"
+                    onClick={loadTestData}
+                  >
+                    Load Test Data
+                  </button>
+                  <button
+                    className={`rounded-md px-6 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-(--color-accent) ${
+                      isLoading 
+                        ? 'bg-opacity-50 cursor-not-allowed'
+                        : 'hover:bg-opacity-90'
+                    } bg-(--color-accent) text-(--color-neutral-900)`}
+                    onClick={handleRunQA}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Running...' : 'Run QA'}
+                  </button>
+                </div>
+              )}
 
-            {selectedAgent && selectedSubComponent && (
-              <div 
-                className="rounded-md px-4 py-3"
-                style={{ backgroundColor: `${getAgentColor(selectedAgent)}20` }}
-              >
-                <p 
-                  className="text-sm font-medium"
-                  style={{ color: getAgentColor(selectedAgent) }}
-                >
-                  Selected: Agent {selectedAgent} → {selectedSubComponent}
-                </p>
-              </div>
-            )}
-          </div>
+              {/* Error Message */}
+              {error && (
+                <div className="rounded-md bg-red-500 bg-opacity-10 border border-red-500 p-4 text-red-500">
+                  {error}
+                </div>
+              )}
 
-          {/* Report Variables Section */}
-          {selectedAgent && (
-            <div 
-              className="rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]"
-              style={{
-                backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
-                backgroundSize: '4px 4px'
-              }}
-            >
-              <div className="relative z-10">
-                <ReportVariables
-                  agent={selectedAgent}
-                  subComponent={selectedSubComponent}
-                  onVariablesChange={handleVariablesChange}
+              {/* QA Response Section */}
+              {qaRun && (
+                <QAResponse
+                  qaRun={qaRun}
+                  onQARating={handleQARating}
+                  onReportRating={handleReportRating}
+                  onSubmit={handleSubmit}
                 />
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          {selectedAgent && Object.keys(variables).length > 0 && (
-            <div className="flex justify-end gap-4">
-              <button
-                className="rounded-md bg-[#1a1d24] px-6 py-2 text-sm font-medium text-(--color-neutral-100) border border-[#2A2E39] hover:border-(--color-accent)"
-                onClick={loadTestData}
-              >
-                Load Test Data
-              </button>
-              <button
-                className={`rounded-md px-6 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-(--color-accent) ${
-                  isLoading 
-                    ? 'bg-opacity-50 cursor-not-allowed'
-                    : 'hover:bg-opacity-90'
-                } bg-(--color-accent) text-(--color-neutral-900)`}
-                onClick={handleRunQA}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Running...' : 'Run QA'}
-              </button>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="rounded-md bg-red-500 bg-opacity-10 border border-red-500 p-4 text-red-500">
-              {error}
-            </div>
-          )}
-
-          {/* QA Response Section */}
-          {qaRun && (
-            <QAResponse
-              qaRun={qaRun}
-              onQARating={handleQARating}
-              onReportRating={handleReportRating}
-              onSubmit={handleSubmit}
-            />
+              )}
+            </>
+          ) : (
+            <Analytics />
           )}
         </main>
       </div>

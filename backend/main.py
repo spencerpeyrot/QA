@@ -43,10 +43,10 @@ class QARequest(BaseModel):
     variables: Dict[str, Any]
 
 class QAPassUpdate(BaseModel):
-    qa_pass: bool
+    qa_rating: int
 
 class ReportPassUpdate(BaseModel):
-    report_pass: bool
+    report_rating: int
 
 @app.get("/")
 async def root():
@@ -118,9 +118,14 @@ async def update_qa_pass(qa_id: str, update: QAPassUpdate):
     try:
         # Convert string ID to MongoDB ObjectId
         object_id = ObjectId(qa_id)
+        # Ensure rating is between 1 and 5
+        rating = max(1, min(5, update.qa_rating))
         result = await qa_evaluations.update_one(
             {"_id": object_id},
-            {"$set": {"qa_pass": update.qa_pass}}
+            {"$set": {
+                "qa_rating": rating,
+                "qa_pass": rating >= 3
+            }}
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="QA evaluation not found")
@@ -133,9 +138,14 @@ async def update_report_pass(qa_id: str, update: ReportPassUpdate):
     try:
         # Convert string ID to MongoDB ObjectId
         object_id = ObjectId(qa_id)
+        # Ensure rating is between 1 and 5
+        rating = max(1, min(5, update.report_rating))
         result = await qa_evaluations.update_one(
             {"_id": object_id},
-            {"$set": {"report_pass": update.report_pass}}
+            {"$set": {
+                "report_rating": rating,
+                "report_pass": rating >= 3
+            }}
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=404, detail="QA evaluation not found")
