@@ -1,0 +1,78 @@
+{
+  "Agent S": {
+    "variables": ["current_date", "question", "report_text"]
+  },
+  "Agent M": {
+    "Long Term View": {
+      "variables": ["current_date", "category", "report_text"]
+    },
+    "Short Term View": {
+      "variables": ["current_date", "prev_trading_day", "market_recap", "market_thesis"]
+    },
+    "Sector Level View": {
+      "variables": ["current_date", "sector_type", "report_text"]
+    },
+    "Key Gamma Levels": {
+      "variables": ["current_date", "ticker", "report_text"]
+    }
+  },
+  "Agent Q": {
+    "Support & Resistance": {
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
+    },
+    "Volume Analysis": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Candlestick Patterns": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Consolidated Analysis": {
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
+    }
+  },
+  "Agent O": {
+    "Flow Analysis": {
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
+    },
+    "Volatility Analysis": {
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
+    },
+    "Consolidated Analysis": {
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
+    }
+  },
+  "Agent E": {
+    "EPS/Revenue Analysis": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Forward Guidance": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Quantitative Analysis": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Options Analysis": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Consolidated Analysis": {
+      "variables": ["current_date", "ticker", "eps_rev_report", "fg_report", "quant_report", "options_report"]
+    }
+  },
+  "Ticker Dashboard": {
+    "Overview": {
+      "variables": ["ticker", "agent_ratings", "overview_report"]
+    },
+    "Agent S Snapshot": {
+      "variables": ["current_date", "ticker", "report_text"]
+    },
+    "Agent Q Snapshot": {
+      "variables": ["current_date", "ticker", "current_price", "td_q_report", "q_standalone_report"]
+    },
+    "Agent O Snapshot": {
+      "variables": ["current_date", "ticker", "current_price", "td_o_report", "o_standalone_report"]
+    },
+    "Agent M Snapshot": {
+      "variables": ["current_date", "ticker", "report_text"]
+    }
+  }
+} 

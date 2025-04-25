@@ -6,49 +6,57 @@ interface ReportVariablesProps {
   onVariablesChange: (variables: Record<string, string>) => void;
 }
 
-type AgentVariables = {
-  [K in keyof typeof REQUIRED_VARIABLES]: {
-    [SubComponent in string]: string[];
-  };
+// Define the structure for each agent's variables
+type AgentConfig = {
+  [subComponent: string]: string[];
+};
+
+type RequiredVariables = {
+  'Agent S': AgentConfig;
+  'Agent M': AgentConfig;
+  'Agent Q': AgentConfig;
+  'Agent O': AgentConfig;
+  'Agent E': AgentConfig;
+  'Ticker Dashboard': AgentConfig;
 };
 
 // Define the variables required for each agent/sub-component combination
-const REQUIRED_VARIABLES = {
-  'S': {
-    '': ['current_date', 'report_text']
+const REQUIRED_VARIABLES: RequiredVariables = {
+  'Agent S': {
+    '': ['current_date', 'question', 'report_text']
   },
-  'M': {
+  'Agent M': {
     'Long Term View': ['current_date', 'category', 'report_text'],
     'Short Term View': ['current_date', 'prev_trading_day', 'market_recap', 'market_thesis'],
     'Sector Level View': ['current_date', 'sector_type', 'report_text'],
     'Key Gamma Levels': ['current_date', 'ticker', 'report_text']
   },
-  'Q': {
+  'Agent Q': {
     'Support & Resistance': ['current_date', 'ticker', 'current_price', 'report_text'],
     'Volume Analysis': ['current_date', 'ticker', 'report_text'],
     'Candlestick Patterns': ['current_date', 'ticker', 'report_text'],
     'Consolidated Analysis': ['current_date', 'ticker', 'current_price', 'report_text']
   },
-  'O': {
+  'Agent O': {
     'Flow Analysis': ['current_date', 'ticker', 'current_price', 'report_text'],
     'Volatility Analysis': ['current_date', 'ticker', 'current_price', 'report_text'],
     'Consolidated Analysis': ['current_date', 'ticker', 'current_price', 'report_text']
   },
-  'E': {
+  'Agent E': {
     'EPS/Revenue Analysis': ['current_date', 'ticker', 'report_text'],
     'Forward Guidance': ['current_date', 'ticker', 'report_text'],
     'Quantitative Analysis': ['current_date', 'ticker', 'report_text'],
     'Options Analysis': ['current_date', 'ticker', 'report_text'],
     'Consolidated Analysis': ['current_date', 'ticker', 'eps_rev_report', 'fg_report', 'quant_report', 'options_report']
   },
-  'TD': {
+  'Ticker Dashboard': {
     'Overview': ['ticker', 'agent_ratings', 'overview_report'],
     'Agent S Snapshot': ['current_date', 'ticker', 'report_text'],
     'Agent Q Snapshot': ['current_date', 'ticker', 'current_price', 'td_q_report', 'q_standalone_report'],
     'Agent O Snapshot': ['current_date', 'ticker', 'current_price', 'td_o_report', 'o_standalone_report'],
     'Agent M Snapshot': ['current_date', 'ticker', 'report_text']
   }
-} as const;
+};
 
 // Helper function to get human-readable label
 const getFieldLabel = (field: string): string => {
@@ -80,7 +88,7 @@ export function ReportVariables({ agent, subComponent, onVariablesChange }: Repo
   const [variables, setVariables] = useState<Record<string, string>>({});
   
   // Get the required variables for the current agent/sub-component
-  const requiredVars = (REQUIRED_VARIABLES as AgentVariables)[agent]?.[subComponent] || [];
+  const requiredVars = REQUIRED_VARIABLES[agent as keyof RequiredVariables]?.[subComponent] || [];
   
   // Reset variables when agent or sub-component changes
   useEffect(() => {

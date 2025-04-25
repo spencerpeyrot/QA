@@ -1,34 +1,35 @@
 import { useState } from 'react'
 import { ReportVariables } from './components/ReportVariables'
 import { QAResponse } from './components/QAResponse'
+import { qaApi } from './services/api'
 
 const AGENT_SUBCOMPONENTS = {
-  'S': [], // Agent S has no sub-components
-  'M': [
+  'Agent S': [], // Agent S has no sub-components
+  'Agent M': [
     'Long Term View',
     'Short Term View',
     'Sector Level View',
     'Key Gamma Levels'
   ],
-  'Q': [
+  'Agent Q': [
     'Support & Resistance',
     'Volume Analysis',
     'Candlestick Patterns',
     'Consolidated Analysis'
   ],
-  'O': [
+  'Agent O': [
     'Flow Analysis',
     'Volatility Analysis',
     'Consolidated Analysis'
   ],
-  'E': [
+  'Agent E': [
     'EPS/Revenue Analysis',
     'Forward Guidance',
     'Quantitative Analysis',
     'Options Analysis',
     'Consolidated Analysis'
   ],
-  'TD': [
+  'Ticker Dashboard': [
     'Overview',
     'Agent S Snapshot',
     'Agent Q Snapshot',
@@ -62,26 +63,7 @@ const TEST_QA_RUN: QARun = {
     report_text: "Sample report text for testing"
   },
   response_markdown: `
-## QA Evaluation Results
-
-### Content Analysis
-✅ The report provides a comprehensive long-term market view for the technology sector.
-✅ Key trends and market drivers are clearly identified.
-⚠️ Consider adding more quantitative data to support the conclusions.
-
-### Technical Assessment
-- Market trends analysis is thorough
-- Sector comparison is well-structured
-- Risk factors are properly identified
-
-### Recommendations
-1. Add more specific market data points
-2. Include competitor analysis
-3. Expand on regulatory impacts
-
-### Overall Rating
-**Quality Score**: 8/10
-The report meets most quality criteria but could benefit from additional quantitative support.
+**Section 1: Contextual Relevance & Coherence** **Rating:** Good **Justification:** The response effectively addresses the question by detailing Meta Platforms' reaction to the €200 million fine under the Digital Markets Act (DMA), highlighting legal resistance, strategic adjustments, and implications for compliance costs and user engagement in Europe. The information is logically organized, with clear transitions between topics such as legal pushback, compliance costs, user engagement risks, revenue pressures, and political escalation. However, the response could benefit from a more explicit connection between Meta's actions and the broader context of EU regulatory enforcement. **Flag Status:** Not flagged **Section 2: Factual Accuracy** **Rating:** Good **Justification:** The majority of factual claims are accurate and supported by credible sources. For instance, Meta's Chief Global Affairs Officer, Joel Kaplan, has indeed framed the fine as a "multi-billion-dollar tariff" and accused the EU of discriminatory enforcement favoring European and Chinese competitors. Additionally, Meta introduced a revised ad model in November 2024 that uses less personal data, which is still under review by EU regulators. ([reuters.com](https://www.reuters.com/sustainability/boards-policy-regulation/what-happens-apple-meta-after-eu-fine-2025-04-23/?utm_source=openai)) However, some claims lack direct verification. For example, the assertion that Meta has halved subscription prices to €4.99/month in some cases to address EU concerns is not directly supported by the provided sources. The sources indicate a reduction from €9.99 to €5.99 per month on the web and from €12.99 to €7.99 per month on iOS and Android, but do not confirm a halving to €4.99. ([about.fb.com](https://about.fb.com/news/2024/11/facebook-and-instagram-to-offer-subscription-for-no-ads-in-europe/?utm_source=openai)) **Flag Status:** Not flagged **Section 3: Completeness & Depth** **Rating:** Good **Justification:** The response thoroughly covers the key aspects of the question, including Meta's legal and political pushback, adjustments to its ad model, potential revenue impacts, and the broader political context. It provides sufficient detail and analysis, referencing specific actions taken by Meta and the EU's regulatory stance. However, the response could delve deeper into the potential long-term effects on Meta's market position and user behavior in Europe. **Flag Status:** Not flagged **Section 4: Overall Quality & Presentation** **Rating:** Good **Justification:** The response is well-written and clearly presented, with a logical flow of ideas and minimal errors. It effectively summarizes key points and provides actionable insights into Meta's strategic responses and the implications for its European operations. The inclusion of specific data points, such as subscription price reductions and stock price movements, adds depth to the analysis. However, the response could benefit from a more concise summary to reinforce the main takeaways. **Flag Status:** Not flagged **Overall Summary and Recommendations:** **Overall Evaluation:** The response provides a comprehensive and coherent analysis of Meta Platforms' reaction to the €200 million EU fine under the Digital Markets Act, effectively addressing the question with relevant details and insights. **Specific Improvement Recommendations:** - **Clarify Subscription Pricing Details:** Ensure that all claims regarding subscription price reductions are accurately supported by credible sources. - **Expand on Long-Term Implications:** Provide a more in-depth analysis of the potential long-term effects on Meta's market position and user behavior in Europe. - **Enhance Summary:** Include a concise summary at the end to reinforce the main takeaways and implications of the analysis. **Final Action:** No sections require further human review.
 `,
   qa_rating: 0,
   report_rating: 0,
@@ -93,6 +75,8 @@ function App() {
   const [selectedSubComponent, setSelectedSubComponent] = useState<string>('');
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [qaRun, setQaRun] = useState<QARun | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const agent = e.target.value;
@@ -104,15 +88,99 @@ function App() {
     setVariables(newVariables);
   };
 
-  const handleQARating = (id: string, rating: number) => {
-    if (qaRun && qaRun.id === id) {
-      setQaRun({ ...qaRun, qa_rating: rating });
+  const handleRunQA = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Format the request data to match backend expectations
+      const requestData = {
+        agent: selectedAgent,
+        sub_component: selectedSubComponent || '', // Empty string instead of undefined
+        variables: {
+          ...variables,
+          current_date: variables.current_date || new Date().toISOString().split('T')[0]
+        }
+      };
+
+      console.log('Sending QA request:', requestData);
+
+      const response = await qaApi.createQAEvaluation(requestData);
+      console.log('QA creation response:', response);
+
+      if (!response?.id) {
+        throw new Error('No evaluation ID received from server');
+      }
+
+      // Add a small delay to allow backend processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        // Fetch the full QA evaluation details
+        const qaEvaluation = await qaApi.getQAEvaluation(response.id);
+        
+        setQaRun({
+          id: qaEvaluation._id,
+          agent: qaEvaluation.agent,
+          sub_component: qaEvaluation.sub_component || null,
+          report_text: qaEvaluation.variables.report_text || '',
+          variables: qaEvaluation.variables,
+          response_markdown: qaEvaluation.response_markdown,
+          qa_rating: 0,
+          report_rating: 0,
+          created_at: qaEvaluation.created_at
+        });
+      } catch (fetchError: any) {
+        // If we can't fetch the evaluation, still show what we got from creation
+        console.warn('Error fetching QA evaluation:', fetchError);
+        setQaRun({
+          id: response.id,
+          agent: selectedAgent,
+          sub_component: selectedSubComponent || null,
+          report_text: variables.report_text || '',
+          variables: variables,
+          response_markdown: response.markdown || 'Processing...',
+          qa_rating: 0,
+          report_rating: 0,
+          created_at: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      const axiosError = err as any;
+      const errorMessage = axiosError.response?.data?.detail || 
+                         axiosError.message || 
+                         'An error occurred while running QA';
+      setError(errorMessage);
+      console.error('QA Error Details:', {
+        message: axiosError.message,
+        response: axiosError.response?.data,
+        status: axiosError.response?.status,
+        data: axiosError.response?.config?.data
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleReportRating = (id: string, rating: number) => {
-    if (qaRun && qaRun.id === id) {
-      setQaRun({ ...qaRun, report_rating: rating });
+  const handleQARating = async (id: string, rating: number) => {
+    try {
+      await qaApi.updateQAPass(id, rating >= 3);
+      if (qaRun && qaRun.id === id) {
+        setQaRun({ ...qaRun, qa_rating: rating });
+      }
+    } catch (err) {
+      console.error('Error updating QA rating:', err);
+    }
+  };
+
+  const handleReportRating = async (id: string, rating: number) => {
+    try {
+      await qaApi.updateReportPass(id, rating >= 3);
+      if (qaRun && qaRun.id === id) {
+        setQaRun({ ...qaRun, report_rating: rating });
+      }
+    } catch (err) {
+      console.error('Error updating report rating:', err);
     }
   };
 
@@ -163,12 +231,12 @@ function App() {
                   className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
                 >
                   <option value="">Select an agent...</option>
-                  <option value="S">Agent S</option>
-                  <option value="M">Agent M</option>
-                  <option value="Q">Agent Q</option>
-                  <option value="O">Agent O</option>
-                  <option value="E">Agent E</option>
-                  <option value="TD">Ticker Dashboard</option>
+                  <option value="Agent S">Agent S</option>
+                  <option value="Agent M">Agent M</option>
+                  <option value="Agent Q">Agent Q</option>
+                  <option value="Agent O">Agent O</option>
+                  <option value="Agent E">Agent E</option>
+                  <option value="Ticker Dashboard">Ticker Dashboard</option>
                 </select>
               </div>
 
@@ -255,11 +323,23 @@ function App() {
                 Load Test Data
               </button>
               <button
-                className="rounded-md bg-(--color-accent) px-6 py-2 text-sm font-medium text-(--color-neutral-900) hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-(--color-accent)"
-                onClick={() => console.log('Variables:', variables)}
+                className={`rounded-md px-6 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-(--color-accent) ${
+                  isLoading 
+                    ? 'bg-opacity-50 cursor-not-allowed'
+                    : 'hover:bg-opacity-90'
+                } bg-(--color-accent) text-(--color-neutral-900)`}
+                onClick={handleRunQA}
+                disabled={isLoading}
               >
-                Run QA
+                {isLoading ? 'Running...' : 'Run QA'}
               </button>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="rounded-md bg-red-500 bg-opacity-10 border border-red-500 p-4 text-red-500">
+              {error}
             </div>
           )}
 

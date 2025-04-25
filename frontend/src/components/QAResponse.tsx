@@ -1,6 +1,8 @@
 import React from 'react';
 import { StarRating } from './StarRating';
 import { ChevronRight, Clock, Hash, CheckCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface QAResponseProps {
   qaRun: {
@@ -58,10 +60,11 @@ export function QAResponse({ qaRun, onQARating, onReportRating, onSubmit }: QARe
 
       {/* LLM Response */}
       <div className="rounded-md bg-[#1a1d24] p-4 border border-[#2A2E39]">
-        <div 
-          className="prose prose-invert max-w-none"
-          dangerouslySetInnerHTML={{ __html: qaRun.response_markdown }}
-        />
+        <div className="prose prose-invert max-w-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {qaRun.response_markdown}
+          </ReactMarkdown>
+        </div>
       </div>
 
       {/* Rating Section */}
