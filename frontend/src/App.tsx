@@ -199,6 +199,14 @@ function App() {
     }
   };
 
+  const handleSubmit = () => {
+    // Reset the form after submission
+    setQaRun(null);
+    setSelectedAgent('');
+    setSelectedSubComponent('');
+    setVariables({});
+  };
+
   return (
     <div className="min-h-screen bg-(--color-background)">
       <div className="p-6">
@@ -349,6 +357,7 @@ function App() {
               qaRun={qaRun}
               onQARating={handleQARating}
               onReportRating={handleReportRating}
+              onSubmit={handleSubmit}
             />
           )}
         </main>

@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 import json
 from prompt_manager import PromptManager
+from bson import ObjectId
 
 # Load environment variables (you'll need to create a .env file)
 from dotenv import load_dotenv
@@ -115,8 +116,10 @@ async def create_qa_evaluation(request: QARequest):
 @app.patch("/qa/{qa_id}/qa_pass")
 async def update_qa_pass(qa_id: str, update: QAPassUpdate):
     try:
+        # Convert string ID to MongoDB ObjectId
+        object_id = ObjectId(qa_id)
         result = await qa_evaluations.update_one(
-            {"_id": qa_id},
+            {"_id": object_id},
             {"$set": {"qa_pass": update.qa_pass}}
         )
         if result.modified_count == 0:
@@ -128,8 +131,10 @@ async def update_qa_pass(qa_id: str, update: QAPassUpdate):
 @app.patch("/qa/{qa_id}/report_pass")
 async def update_report_pass(qa_id: str, update: ReportPassUpdate):
     try:
+        # Convert string ID to MongoDB ObjectId
+        object_id = ObjectId(qa_id)
         result = await qa_evaluations.update_one(
-            {"_id": qa_id},
+            {"_id": object_id},
             {"$set": {"report_pass": update.report_pass}}
         )
         if result.modified_count == 0:
@@ -141,7 +146,9 @@ async def update_report_pass(qa_id: str, update: ReportPassUpdate):
 @app.get("/qa/{qa_id}")
 async def get_qa_evaluation(qa_id: str):
     try:
-        doc = await qa_evaluations.find_one({"_id": qa_id})
+        # Convert string ID to MongoDB ObjectId
+        object_id = ObjectId(qa_id)
+        doc = await qa_evaluations.find_one({"_id": object_id})
         if not doc:
             raise HTTPException(status_code=404, detail="QA evaluation not found")
         doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
