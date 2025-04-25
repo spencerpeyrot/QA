@@ -24,7 +24,7 @@ export interface QAEvaluation {
     response_markdown: string;
     qa_pass: boolean | null;
     report_pass: boolean | null;
-    qa_rating: number | null;
+    qa_rating: boolean | null;
     report_rating: number | null;
     created_at: string;
 }
@@ -100,8 +100,8 @@ export const qaApi = {
     },
 
     // Update QA pass status
-    updateQAPass: async (qaId: string, rating: number): Promise<void> => {
-        await apiClient.patch(`/qa/${qaId}/qa_pass`, { qa_rating: rating });
+    updateQAPass: async (qaId: string, isGood: boolean): Promise<void> => {
+        await apiClient.patch(`/qa/${qaId}/qa_pass`, { qa_rating: isGood });
     },
 
     // Update report pass status

@@ -47,7 +47,7 @@ interface QARun {
   report_text: string;
   variables: Record<string, string>;
   response_markdown: string;
-  qa_rating: number;
+  qa_rating: boolean | null;
   report_rating: number;
   created_at: string;
 }
@@ -66,7 +66,7 @@ const TEST_QA_RUN: QARun = {
   response_markdown: `
 **Section 1: Contextual Relevance & Coherence** **Rating:** Good **Justification:** The response effectively addresses the question by detailing Meta Platforms' reaction to the €200 million fine under the Digital Markets Act (DMA), highlighting legal resistance, strategic adjustments, and implications for compliance costs and user engagement in Europe. The information is logically organized, with clear transitions between topics such as legal pushback, compliance costs, user engagement risks, revenue pressures, and political escalation. However, the response could benefit from a more explicit connection between Meta's actions and the broader context of EU regulatory enforcement. **Flag Status:** Not flagged **Section 2: Factual Accuracy** **Rating:** Good **Justification:** The majority of factual claims are accurate and supported by credible sources. For instance, Meta's Chief Global Affairs Officer, Joel Kaplan, has indeed framed the fine as a "multi-billion-dollar tariff" and accused the EU of discriminatory enforcement favoring European and Chinese competitors. Additionally, Meta introduced a revised ad model in November 2024 that uses less personal data, which is still under review by EU regulators. ([reuters.com](https://www.reuters.com/sustainability/boards-policy-regulation/what-happens-apple-meta-after-eu-fine-2025-04-23/?utm_source=openai)) However, some claims lack direct verification. For example, the assertion that Meta has halved subscription prices to €4.99/month in some cases to address EU concerns is not directly supported by the provided sources. The sources indicate a reduction from €9.99 to €5.99 per month on the web and from €12.99 to €7.99 per month on iOS and Android, but do not confirm a halving to €4.99. ([about.fb.com](https://about.fb.com/news/2024/11/facebook-and-instagram-to-offer-subscription-for-no-ads-in-europe/?utm_source=openai)) **Flag Status:** Not flagged **Section 3: Completeness & Depth** **Rating:** Good **Justification:** The response thoroughly covers the key aspects of the question, including Meta's legal and political pushback, adjustments to its ad model, potential revenue impacts, and the broader political context. It provides sufficient detail and analysis, referencing specific actions taken by Meta and the EU's regulatory stance. However, the response could delve deeper into the potential long-term effects on Meta's market position and user behavior in Europe. **Flag Status:** Not flagged **Section 4: Overall Quality & Presentation** **Rating:** Good **Justification:** The response is well-written and clearly presented, with a logical flow of ideas and minimal errors. It effectively summarizes key points and provides actionable insights into Meta's strategic responses and the implications for its European operations. The inclusion of specific data points, such as subscription price reductions and stock price movements, adds depth to the analysis. However, the response could benefit from a more concise summary to reinforce the main takeaways. **Flag Status:** Not flagged **Overall Summary and Recommendations:** **Overall Evaluation:** The response provides a comprehensive and coherent analysis of Meta Platforms' reaction to the €200 million EU fine under the Digital Markets Act, effectively addressing the question with relevant details and insights. **Specific Improvement Recommendations:** - **Clarify Subscription Pricing Details:** Ensure that all claims regarding subscription price reductions are accurately supported by credible sources. - **Expand on Long-Term Implications:** Provide a more in-depth analysis of the potential long-term effects on Meta's market position and user behavior in Europe. - **Enhance Summary:** Include a concise summary at the end to reinforce the main takeaways and implications of the analysis. **Final Action:** No sections require further human review.
 `,
-  qa_rating: 0,
+  qa_rating: null,
   report_rating: 0,
   created_at: new Date().toISOString()
 };
@@ -101,7 +101,7 @@ function App() {
         sub_component: selectedSubComponent || '', // Empty string instead of undefined
         variables: {
           ...variables,
-          current_date: variables.current_date || new Date().toISOString().split('T')[0]
+          current_date: new Date().toISOString().split('T')[0]  // Always use current date
         }
       };
 
@@ -128,7 +128,7 @@ function App() {
           report_text: qaEvaluation.variables.report_text || '',
           variables: qaEvaluation.variables,
           response_markdown: qaEvaluation.response_markdown,
-          qa_rating: 0,
+          qa_rating: null,
           report_rating: 0,
           created_at: qaEvaluation.created_at
         });
@@ -142,7 +142,7 @@ function App() {
           report_text: variables.report_text || '',
           variables: variables,
           response_markdown: response.markdown || 'Processing...',
-          qa_rating: 0,
+          qa_rating: null,
           report_rating: 0,
           created_at: new Date().toISOString()
         });
@@ -164,11 +164,11 @@ function App() {
     }
   };
 
-  const handleQARating = async (id: string, rating: number) => {
+  const handleQARating = async (id: string, isGood: boolean) => {
     try {
-      await qaApi.updateQAPass(id, rating);
+      await qaApi.updateQAPass(id, isGood);
       if (qaRun && qaRun.id === id) {
-        setQaRun({ ...qaRun, qa_rating: rating });
+        setQaRun({ ...qaRun, qa_rating: isGood });
       }
     } catch (err) {
       console.error('Error updating QA rating:', err);
@@ -183,6 +183,75 @@ function App() {
       }
     } catch (err) {
       console.error('Error updating report rating:', err);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!qaRun) return;
+    
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Use the same request data from the previous run
+      const requestData = {
+        agent: qaRun.agent,
+        sub_component: qaRun.sub_component || '',
+        variables: qaRun.variables
+      };
+
+      const response = await qaApi.createQAEvaluation(requestData);
+      
+      if (!response?.id) {
+        throw new Error('No evaluation ID received from server');
+      }
+
+      // Add a small delay to allow backend processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        // Fetch the full QA evaluation details
+        const qaEvaluation = await qaApi.getQAEvaluation(response.id);
+        
+        setQaRun({
+          id: qaEvaluation._id,
+          agent: qaEvaluation.agent,
+          sub_component: qaEvaluation.sub_component || null,
+          report_text: qaEvaluation.variables.report_text || '',
+          variables: qaEvaluation.variables,
+          response_markdown: qaEvaluation.response_markdown,
+          qa_rating: null,
+          report_rating: 0,
+          created_at: qaEvaluation.created_at
+        });
+      } catch (fetchError: any) {
+        console.warn('Error fetching QA evaluation:', fetchError);
+        setQaRun({
+          id: response.id,
+          agent: qaRun.agent,
+          sub_component: qaRun.sub_component,
+          report_text: qaRun.variables.report_text || '',
+          variables: qaRun.variables,
+          response_markdown: response.markdown || 'Processing...',
+          qa_rating: null,
+          report_rating: 0,
+          created_at: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      const axiosError = err as any;
+      const errorMessage = axiosError.response?.data?.detail || 
+                         axiosError.message || 
+                         'An error occurred while running QA';
+      setError(errorMessage);
+      console.error('QA Error Details:', {
+        message: axiosError.message,
+        response: axiosError.response?.data,
+        status: axiosError.response?.status,
+        data: axiosError.response?.config?.data
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -388,6 +457,7 @@ function App() {
                   onQARating={handleQARating}
                   onReportRating={handleReportRating}
                   onSubmit={handleSubmit}
+                  onRetry={handleRetry}
                 />
               )}
             </>

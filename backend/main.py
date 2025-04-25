@@ -9,6 +9,11 @@ from datetime import datetime
 import json
 from prompt_manager import PromptManager
 from bson import ObjectId
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load environment variables (you'll need to create a .env file)
 from dotenv import load_dotenv
@@ -43,7 +48,7 @@ class QARequest(BaseModel):
     variables: Dict[str, Any]
 
 class QAPassUpdate(BaseModel):
-    qa_rating: int
+    qa_rating: bool
 
 class ReportPassUpdate(BaseModel):
     report_rating: int
@@ -90,7 +95,13 @@ async def create_qa_evaluation(request: QARequest):
             if chunk.choices[0].delta.content:
                 collected_response += chunk.choices[0].delta.content
         
-        # Create document
+        # Create document with timestamp logging
+        created_at = datetime.utcnow()
+        current_utc = datetime.utcnow()
+        logger.info(f"Current UTC time: {current_utc.isoformat()}")
+        logger.info(f"Creating QA evaluation with UTC timestamp: {created_at.isoformat()}")
+        logger.info(f"Timestamp components - Year: {created_at.year}, Month: {created_at.month}, Day: {created_at.day}, Hour: {created_at.hour}, Minute: {created_at.minute}")
+        
         doc = {
             "agent": request.agent,
             "sub_component": request.sub_component,
@@ -100,10 +111,12 @@ async def create_qa_evaluation(request: QARequest):
             "response_markdown": collected_response,
             "qa_pass": None,
             "report_pass": None,
-            "created_at": datetime.utcnow()
+            "created_at": created_at
         }
         
         result = await qa_evaluations.insert_one(doc)
+        stored_doc = await qa_evaluations.find_one({"_id": result.inserted_id})
+        logger.info(f"Stored document timestamp: {stored_doc['created_at'].isoformat() if stored_doc else 'Not found'}")
         
         return {
             "id": str(result.inserted_id),
@@ -111,6 +124,7 @@ async def create_qa_evaluation(request: QARequest):
         }
         
     except Exception as e:
+        logger.error(f"Error creating QA evaluation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/qa/{qa_id}/qa_pass")
@@ -118,13 +132,11 @@ async def update_qa_pass(qa_id: str, update: QAPassUpdate):
     try:
         # Convert string ID to MongoDB ObjectId
         object_id = ObjectId(qa_id)
-        # Ensure rating is between 1 and 5
-        rating = max(1, min(5, update.qa_rating))
         result = await qa_evaluations.update_one(
             {"_id": object_id},
             {"$set": {
-                "qa_rating": rating,
-                "qa_pass": rating >= 3
+                "qa_rating": update.qa_rating,
+                "qa_pass": update.qa_rating
             }}
         )
         if result.modified_count == 0:
@@ -161,9 +173,11 @@ async def get_qa_evaluation(qa_id: str):
         doc = await qa_evaluations.find_one({"_id": object_id})
         if not doc:
             raise HTTPException(status_code=404, detail="QA evaluation not found")
+        logger.info(f"Retrieved QA evaluation {qa_id} with timestamp: {doc['created_at'].isoformat()}")
         doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
         return doc
     except Exception as e:
+        logger.error(f"Error retrieving QA evaluation {qa_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/qa")
@@ -172,8 +186,10 @@ async def list_qa_evaluations(limit: int = 20):
         cursor = qa_evaluations.find().sort("created_at", -1).limit(limit)
         evaluations = []
         async for doc in cursor:
+            logger.info(f"Listed QA evaluation {doc['_id']} with timestamp: {doc['created_at'].isoformat()}")
             doc["_id"] = str(doc["_id"])
             evaluations.append(doc)
         return evaluations
     except Exception as e:
+        logger.error(f"Error listing QA evaluations: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 

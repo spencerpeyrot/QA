@@ -46,18 +46,26 @@ export function Analytics() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-[#2A2E39]">
-              <th className="text-left p-2 text-sm font-medium text-(--color-neutral-500)">Date</th>
+              <th className="text-left p-2 text-sm font-medium text-(--color-neutral-500)">Timestamp</th>
               <th className="text-left p-2 text-sm font-medium text-(--color-neutral-500)">Agent</th>
               <th className="text-left p-2 text-sm font-medium text-(--color-neutral-500)">Sub-component</th>
-              <th className="text-left p-2 text-sm font-medium text-(--color-neutral-500)">QA Rating</th>
-              <th className="text-left p-2 text-sm font-medium text-(--color-neutral-500)">Report Rating</th>
+              <th className="text-center p-2 text-sm font-medium text-(--color-neutral-500)">QA Prompt Rating</th>
+              <th className="text-center p-2 text-sm font-medium text-(--color-neutral-500)">Agent Output Rating</th>
             </tr>
           </thead>
           <tbody>
             {evaluations.map((evaluation) => (
               <tr key={evaluation._id} className="border-b border-[#2A2E39] hover:bg-[#1a1d24]">
                 <td className="p-2 text-sm text-(--color-neutral-100)">
-                  {new Date(evaluation.created_at).toLocaleString()}
+                  {(() => {
+                    const utcString = evaluation.created_at + 'Z';
+                    const date = new Date(utcString);
+                    return date.toLocaleString('en-US', {
+                      year: 'numeric', month: 'numeric', day: 'numeric',
+                      hour: 'numeric', minute: '2-digit', hour12: true,
+                      timeZone: 'America/New_York'
+                    });
+                  })()}
                 </td>
                 <td className="p-2 text-sm text-(--color-neutral-100)">
                   {evaluation.agent}
@@ -65,10 +73,10 @@ export function Analytics() {
                 <td className="p-2 text-sm text-(--color-neutral-100)">
                   {evaluation.sub_component || '-'}
                 </td>
-                <td className="p-2 text-sm text-(--color-neutral-100)">
-                  {evaluation.qa_rating ? `${evaluation.qa_rating}/5` : '-'}
+                <td className="p-2 text-sm text-(--color-neutral-100) text-center">
+                  {evaluation.qa_rating === null ? '-' : evaluation.qa_rating ? 'Pass' : 'Fail'}
                 </td>
-                <td className="p-2 text-sm text-(--color-neutral-100)">
+                <td className="p-2 text-sm text-(--color-neutral-100) text-center">
                   {evaluation.report_rating ? `${evaluation.report_rating}/5` : '-'}
                 </td>
               </tr>
