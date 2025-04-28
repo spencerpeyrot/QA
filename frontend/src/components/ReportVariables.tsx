@@ -4,6 +4,9 @@ interface ReportVariablesProps {
   agent: string;
   subComponent: string;
   onVariablesChange: (variables: Record<string, string>) => void;
+  onRunQA: () => void;
+  isLoading: boolean;
+  hasActiveQA: boolean;
 }
 
 // Define the structure for each agent's variables
@@ -84,7 +87,7 @@ const getFieldLabel = (field: string): string => {
   return labels[field] || field.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
-export function ReportVariables({ agent, subComponent, onVariablesChange }: ReportVariablesProps) {
+export function ReportVariables({ agent, subComponent, onVariablesChange, onRunQA, isLoading, hasActiveQA }: ReportVariablesProps) {
   const [variables, setVariables] = useState<Record<string, string>>({});
   
   // Get the required variables for the current agent/sub-component
@@ -131,8 +134,9 @@ export function ReportVariables({ agent, subComponent, onVariablesChange }: Repo
                 id={field}
                 value={variables[field] || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
-                className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) min-h-[100px]"
+                className="w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) min-h-[100px]"
                 placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
+                disabled={isLoading}
               />
             ) : (
               <input
@@ -140,13 +144,32 @@ export function ReportVariables({ agent, subComponent, onVariablesChange }: Repo
                 id={field}
                 value={variables[field] || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
-                className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
+                className={`w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)
+                  ${field === 'current_date' ? '[color-scheme:dark]' : ''}`}
                 placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
+                disabled={isLoading}
               />
             )}
           </div>
         ))}
       </div>
+      {Object.keys(variables).length > 0 && (
+        <div className="flex justify-end pt-4">
+          <button
+            className={`rounded-md px-6 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-(--color-accent) transition-all duration-150
+              ${isLoading 
+                ? 'bg-opacity-50 cursor-not-allowed bg-(--color-neutral-800) text-(--color-neutral-500)'
+                : hasActiveQA
+                ? 'border-2 border-(--color-accent) text-(--color-accent) cursor-not-allowed bg-transparent hover:bg-transparent'
+                : 'bg-(--color-accent) text-(--color-neutral-900) hover:bg-opacity-90'
+              }`}
+            onClick={onRunQA}
+            disabled={isLoading || hasActiveQA}
+          >
+            {isLoading ? 'Running...' : hasActiveQA ? 'Completed' : 'Run QA'}
+          </button>
+        </div>
+      )}
     </div>
   );
 } 

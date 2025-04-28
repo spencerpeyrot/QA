@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ReportVariables } from './components/ReportVariables'
 import { QAResponse } from './components/QAResponse'
 import { Analytics } from './components/Analytics'
@@ -79,6 +79,27 @@ function App() {
   const [qaRun, setQaRun] = useState<QARun | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const qaResponseRef = useRef<HTMLDivElement>(null);
+  const [shouldScroll, setShouldScroll] = useState(false);
+  const [retryCompleted, setRetryCompleted] = useState(false);
+
+  // Track whether there is an active QA run
+  const hasActiveQA = Boolean(qaRun && !isLoading);
+
+  // Modified scroll effect
+  useEffect(() => {
+    if (qaResponseRef.current) {
+      if (shouldScroll) {
+        // Smooth scroll for initial QA run
+        qaResponseRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setShouldScroll(false); // Reset after scrolling
+      } else if (retryCompleted) {
+        // Instant scroll for retry completion
+        qaResponseRef.current.scrollIntoView({ behavior: 'instant', block: 'start' });
+        setRetryCompleted(false); // Reset after scrolling
+      }
+    }
+  }, [shouldScroll, retryCompleted, qaRun]); // Add retryCompleted and qaRun to dependencies
 
   const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const agent = e.target.value;
@@ -94,6 +115,20 @@ function App() {
     try {
       setIsLoading(true);
       setError(null);
+      setShouldScroll(true); // Set scroll flag for initial QA run
+
+      // Show loading state immediately
+      setQaRun({
+        id: 'loading',
+        agent: selectedAgent,
+        sub_component: selectedSubComponent || null,
+        report_text: variables.report_text || '',
+        variables: variables,
+        response_markdown: 'Processing...',
+        qa_rating: null,
+        report_rating: 0,
+        created_at: new Date().toISOString()
+      });
 
       // Format the request data to match backend expectations
       const requestData = {
@@ -193,6 +228,15 @@ function App() {
       setIsLoading(true);
       setError(null);
 
+      // Show loading state immediately while preserving the original qaRun's data
+      setQaRun({
+        ...qaRun,
+        qa_rating: null,
+        report_rating: 0,
+        response_markdown: 'Processing...',
+        created_at: new Date().toISOString()
+      });
+
       // Use the same request data from the previous run
       const requestData = {
         agent: qaRun.agent,
@@ -224,6 +268,10 @@ function App() {
           report_rating: 0,
           created_at: qaEvaluation.created_at
         });
+
+        // Trigger scroll effect after successful retry
+        setRetryCompleted(true);
+
       } catch (fetchError: any) {
         console.warn('Error fetching QA evaluation:', fetchError);
         setQaRun({
@@ -237,6 +285,9 @@ function App() {
           report_rating: 0,
           created_at: new Date().toISOString()
         });
+
+        // Trigger scroll effect even after failed fetch
+        setRetryCompleted(true);
       }
     } catch (err) {
       const axiosError = err as any;
@@ -332,35 +383,28 @@ function App() {
                     >
                       Agent:
                     </label>
-                    <select 
-                      id="agent" 
-                      value={selectedAgent} 
-                      onChange={handleAgentChange}
-                      className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
-                    >
-                      <option value="">Select an agent...</option>
-                      <option value="Agent S">Agent S</option>
-                      <option value="Agent M">Agent M</option>
-                      <option value="Agent Q">Agent Q</option>
-                      <option value="Agent O">Agent O</option>
-                      <option value="Agent E">Agent E</option>
-                      <option value="Ticker Dashboard">Ticker Dashboard</option>
-                    </select>
-                  </div>
-
-                  {selectedAgent && (
-                    <div 
-                      className="rounded-md px-4 py-3"
-                      style={{ backgroundColor: `${getAgentColor(selectedAgent)}20` }}
-                    >
-                      <p 
-                        className="text-sm font-medium"
-                        style={{ color: getAgentColor(selectedAgent) }}
+                    <div className="relative flex-1">
+                      <select 
+                        id="agent" 
+                        value={selectedAgent} 
+                        onChange={handleAgentChange}
+                        className="w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) appearance-none cursor-pointer"
                       >
-                        Selected: Agent {selectedAgent}
-                      </p>
+                        <option value="" className="bg-(--color-background)">Select an agent...</option>
+                        <option value="Agent S" className="bg-(--color-background)">Agent S</option>
+                        <option value="Agent M" className="bg-(--color-background)">Agent M</option>
+                        <option value="Agent Q" className="bg-(--color-background)">Agent Q</option>
+                        <option value="Agent O" className="bg-(--color-background)">Agent O</option>
+                        <option value="Agent E" className="bg-(--color-background)">Agent E</option>
+                        <option value="Ticker Dashboard" className="bg-(--color-background)">Ticker Dashboard</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
+                        <svg className="h-4 w-4 fill-current text-(--color-neutral-500)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {selectedAgent && AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].length > 0 && (
@@ -371,33 +415,26 @@ function App() {
                     >
                       Sub-component:
                     </label>
-                    <select
-                      id="subcomponent"
-                      value={selectedSubComponent}
-                      onChange={(e) => setSelectedSubComponent(e.target.value)}
-                      className="w-full rounded-md border border-[#2A2E39] bg-[#1a1d24] px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)"
-                    >
-                      <option value="">Select a sub-component...</option>
-                      {AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].map((subComponent) => (
-                        <option key={subComponent} value={subComponent}>
-                          {subComponent}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {selectedAgent && selectedSubComponent && (
-                  <div 
-                    className="rounded-md px-4 py-3"
-                    style={{ backgroundColor: `${getAgentColor(selectedAgent)}20` }}
-                  >
-                    <p 
-                      className="text-sm font-medium"
-                      style={{ color: getAgentColor(selectedAgent) }}
-                    >
-                      Selected: Agent {selectedAgent} → {selectedSubComponent}
-                    </p>
+                    <div className="relative flex-1">
+                      <select
+                        id="subcomponent"
+                        value={selectedSubComponent}
+                        onChange={(e) => setSelectedSubComponent(e.target.value)}
+                        className="w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) appearance-none cursor-pointer"
+                      >
+                        <option value="" className="bg-(--color-background)">Select a sub-component...</option>
+                        {AGENT_SUBCOMPONENTS[selectedAgent as keyof typeof AGENT_SUBCOMPONENTS].map((subComponent) => (
+                          <option key={subComponent} value={subComponent} className="bg-(--color-background)">
+                            {subComponent}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2">
+                        <svg className="h-4 w-4 fill-current text-(--color-neutral-500)" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -415,31 +452,11 @@ function App() {
                       agent={selectedAgent}
                       subComponent={selectedSubComponent}
                       onVariablesChange={handleVariablesChange}
+                      onRunQA={handleRunQA}
+                      isLoading={isLoading}
+                      hasActiveQA={hasActiveQA}
                     />
                   </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              {selectedAgent && Object.keys(variables).length > 0 && (
-                <div className="flex justify-end gap-4">
-                  <button
-                    className="rounded-md bg-[#1a1d24] px-6 py-2 text-sm font-medium text-(--color-neutral-100) border border-[#2A2E39] hover:border-(--color-accent)"
-                    onClick={loadTestData}
-                  >
-                    Load Test Data
-                  </button>
-                  <button
-                    className={`rounded-md px-6 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-(--color-accent) ${
-                      isLoading 
-                        ? 'bg-opacity-50 cursor-not-allowed'
-                        : 'hover:bg-opacity-90'
-                    } bg-(--color-accent) text-(--color-neutral-900)`}
-                    onClick={handleRunQA}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Running...' : 'Run QA'}
-                  </button>
                 </div>
               )}
 
@@ -451,15 +468,17 @@ function App() {
               )}
 
               {/* QA Response Section */}
-              {qaRun && (
-                <QAResponse
-                  qaRun={qaRun}
-                  onQARating={handleQARating}
-                  onReportRating={handleReportRating}
-                  onSubmit={handleSubmit}
-                  onRetry={handleRetry}
-                />
-              )}
+              <div ref={qaResponseRef}>
+                {qaRun && (
+                  <QAResponse
+                    qaRun={qaRun}
+                    onQARating={handleQARating}
+                    onReportRating={handleReportRating}
+                    onSubmit={handleSubmit}
+                    onRetry={handleRetry}
+                  />
+                )}
+              </div>
             </>
           ) : (
             <Analytics />
