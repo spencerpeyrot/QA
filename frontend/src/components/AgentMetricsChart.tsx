@@ -121,7 +121,13 @@ const AgentMetricsChart: React.FC = () => {
   });
 
   return (
-    <div className="rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]">
+    <div 
+      className="rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]"
+      style={{
+        backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
+        backgroundSize: '4px 4px'
+      }}
+    >
       <div className="metrics-header flex justify-between items-center">
         <h2 className="text-lg font-medium text-(--color-neutral-100)">Performance Metrics</h2>
         <div className="flex items-center gap-2 text-sm">
@@ -154,7 +160,8 @@ const AgentMetricsChart: React.FC = () => {
                     return (
                       <div 
                         key={component.name} 
-                        className="bg-[--color-neutral-900]/80 p-4 rounded-lg border border-[#2A2E39] shadow-sm flex-none w-[300px] snap-start"
+                        className="bg-(--color-background) p-4 rounded-lg border border-[#2A2E39] shadow-sm flex-none w-[300px] snap-start"
+                        style={{ position: 'relative', zIndex: 1 }}
                       >
                         <h4 className="text-sm font-medium text-(--color-neutral-100) mb-2">
                           {component.name === agent ? 'Performance' : component.name}
@@ -178,10 +185,12 @@ const AgentMetricsChart: React.FC = () => {
                                 domain={[0, 5]}
                                 tick={{ fontSize: 9, fill: 'var(--color-neutral-100)' }}
                                 stroke="#2A2E39"
+                                width={40}
                                 label={{ 
                                   value: 'Rating', 
                                   angle: -90, 
                                   position: 'insideLeft',
+                                  offset: 10,
                                   style: { textAnchor: 'middle', fill: 'var(--color-neutral-100)', fontSize: 9 }
                                 }}
                               />

@@ -63,7 +63,13 @@ export function Analytics() {
 
   return (
     <div className="analytics-container flex flex-col gap-8">
-      <div className="rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]">
+      <div 
+        className="rounded-lg bg-(--color-background) p-6 shadow-lg relative overflow-hidden border border-[#2A2E39]"
+        style={{
+          backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
+          backgroundSize: '4px 4px'
+        }}
+      >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-medium text-(--color-neutral-100)">QA Evaluations</h2>
           <button 
