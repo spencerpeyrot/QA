@@ -192,4 +192,22 @@ async def list_qa_evaluations(limit: int = 20):
         return evaluations
     except Exception as e:
         logger.error(f"Error listing QA evaluations: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/qa/{qa_id}")
+async def delete_qa_evaluation(qa_id: str):
+    try:
+        object_id = ObjectId(qa_id)
+        result = await qa_evaluations.delete_one({"_id": object_id})
+        if result.deleted_count == 0:
+            logger.warning(f"Attempted to delete non-existent QA evaluation: {qa_id}")
+            raise HTTPException(status_code=404, detail="QA evaluation not found")
+        logger.info(f"Deleted QA evaluation: {qa_id}")
+        return {"status": "deleted", "deleted_id": qa_id}
+    except Exception as e:
+        logger.error(f"Error deleting QA evaluation {qa_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000) 

@@ -114,6 +114,12 @@ export const qaApi = {
         const response = await apiClient.get<QAEvaluation[]>('/qa', { params: { limit } });
         return response.data;
     },
+
+    // Delete a QA evaluation
+    deleteQAEvaluation: async (qaId: string): Promise<{ status: string; deleted_id: string }> => {
+        const response = await apiClient.delete<{ status: string; deleted_id: string }>(`/qa/${qaId}`);
+        return response.data;
+    },
 };
 
 export default qaApi; 
