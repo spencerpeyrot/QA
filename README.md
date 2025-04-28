@@ -7,10 +7,10 @@ A lean, local-first web application that enables analysts to QA components of Ag
 - **Modern Dark Theme UI**: Sleek, professional dark mode interface optimized for long analysis sessions
 - **Interactive Rating System**: 5-star rating system for both QA quality and report accuracy
 - **Agent & Component Selection**: Two-level dropdown for precise agent and sub-component targeting
-- **Variable Management**: Dynamic form generation based on component requirements {COMING SOON}
-- **Real-time LLM Integration**: Streaming responses from OpenAI's GPT-4-Search {COMING SOON}
-- **Markdown Rendering**: Beautiful display of LLM-generated analysis {COMING SOON}
-- **Persistent Storage**: MongoDB integration for historical analysis {COMING SOON}
+- **Variable Management**: Dynamic form generation based on component requirements 
+- **Real-time LLM Integration**: Streaming responses from OpenAI's GPT-4-Search 
+- **Markdown Rendering**: Beautiful display of LLM-generated analysis 
+- **Persistent Storage**: MongoDB integration for historical analysis 
 
 ## Tech Stack
 
