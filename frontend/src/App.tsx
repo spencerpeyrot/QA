@@ -314,7 +314,7 @@ function App() {
             </button>
           </div>
         </header>
-        
+
         <main className="space-y-6">
           {selectedTab === 'qa' ? (
             <>
@@ -467,7 +467,7 @@ function App() {
         </main>
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
