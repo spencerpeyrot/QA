@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { ReportVariables } from './components/ReportVariables'
 import { QAResponse } from './components/QAResponse'
 import { Analytics } from './components/Analytics'
+import { AutomatedQA } from './components/AutomatedQA'
+import { AutomatedAnalytics } from './components/AutomatedAnalytics'
 import { qaApi } from './services/api'
 
 const AGENT_SUBCOMPONENTS = {
@@ -72,7 +74,7 @@ const TEST_QA_RUN: QARun = {
 };
 
 function App() {
-  const [selectedTab, setSelectedTab] = useState<'qa' | 'analytics'>('qa');
+  const [selectedTab, setSelectedTab] = useState<'qa' | 'analytics' | 'automated' | 'automated-analytics'>('qa');
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [selectedSubComponent, setSelectedSubComponent] = useState<string>('');
   const [variables, setVariables] = useState<Record<string, string>>({});
@@ -345,7 +347,7 @@ function App() {
               }`}
               onClick={() => setSelectedTab('qa')}
             >
-              QA
+              Manual QA
               {selectedTab === 'qa' && (
                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
               )}
@@ -360,6 +362,32 @@ function App() {
             >
               Analytics
               {selectedTab === 'analytics' && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
+              )}
+            </button>
+            <button
+              className={`px-4 py-2 font-medium text-sm transition-colors relative ${
+                selectedTab === 'automated'
+                  ? 'text-(--color-accent)'
+                  : 'text-(--color-neutral-500) hover:text-(--color-neutral-100)'
+              }`}
+              onClick={() => setSelectedTab('automated')}
+            >
+              Automated QA
+              {selectedTab === 'automated' && (
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
+              )}
+            </button>
+            <button
+              className={`px-4 py-2 font-medium text-sm transition-colors relative ${
+                selectedTab === 'automated-analytics'
+                  ? 'text-(--color-accent)'
+                  : 'text-(--color-neutral-500) hover:text-(--color-neutral-100)'
+              }`}
+              onClick={() => setSelectedTab('automated-analytics')}
+            >
+              Automated Analytics
+              {selectedTab === 'automated-analytics' && (
                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
               )}
             </button>
@@ -480,8 +508,12 @@ function App() {
                 )}
               </div>
             </>
-          ) : (
+          ) : selectedTab === 'analytics' ? (
             <Analytics />
+          ) : selectedTab === 'automated' ? (
+            <AutomatedQA />
+          ) : (
+            <AutomatedAnalytics />
           )}
         </main>
       </div>
