@@ -409,17 +409,27 @@ const StatusCell: React.FC<StatusCellProps> = ({ value }) => {
 const AutomatedAnalytics = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<LTVStats | null>(null);
+  const [ltvStats, setLtvStats] = useState<LTVStats | null>(null);
+  const [tickerPulseStats, setTickerPulseStats] = useState<LTVStats | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('http://localhost:8000/evaluations/ltv/stats');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch stats: ${response.status} ${response.statusText}`);
+        // Fetch LTV stats
+        const ltvResponse = await fetch('http://localhost:8000/evaluations/ltv/stats');
+        if (!ltvResponse.ok) {
+          throw new Error(`Failed to fetch LTV stats: ${ltvResponse.status} ${ltvResponse.statusText}`);
         }
-        const data = await response.json();
-        setStats(data);
+        const ltvData = await ltvResponse.json();
+        setLtvStats(ltvData);
+
+        // Fetch Ticker Pulse stats
+        const tickerPulseResponse = await fetch('http://localhost:8000/evaluations/ticker-pulse/stats');
+        if (!tickerPulseResponse.ok) {
+          throw new Error(`Failed to fetch Ticker Pulse stats: ${tickerPulseResponse.status} ${tickerPulseResponse.statusText}`);
+        }
+        const tickerPulseData = await tickerPulseResponse.json();
+        setTickerPulseStats(tickerPulseData);
       } catch (error) {
         console.error('Error fetching stats:', error);
         setError(error instanceof Error ? error.message : 'An error occurred');
@@ -462,31 +472,80 @@ const AutomatedAnalytics = () => {
           <div className="mb-6">
             <h3 className="text-lg font-medium text-(--color-neutral-100) mb-6">Long Term View</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-              {stats && (
+              {ltvStats && (
                 <>
                   <StatCard
                     label="Quality Score"
-                    value={stats.averageQualityScore || 0}
+                    value={ltvStats.averageQualityScore || 0}
                     unit="/100"
                   />
                   <StatCard
                     label="Factual Accuracy"
-                    value={stats.factualAccuracyRate || 0}
+                    value={ltvStats.factualAccuracyRate || 0}
                     unit="%"
                   />
                   <StatCard
                     label="Completeness"
-                    value={stats.completenessRate || 0}
+                    value={ltvStats.completenessRate || 0}
                     unit="%"
                   />
                   <StatCard
                     label="Quality Pass Rate"
-                    value={stats.qualityRate || 0}
+                    value={ltvStats.qualityRate || 0}
                     unit="%"
                   />
                   <StatCard
                     label="Hallucination-Free"
-                    value={stats.hallucinationFreeRate || 0}
+                    value={ltvStats.hallucinationFreeRate || 0}
+                    unit="%"
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div 
+        className="rounded-lg bg-(--color-background) shadow-lg relative overflow-hidden border border-[#2A2E39]"
+        style={{
+          backgroundImage: 'radial-gradient(circle, #c1ff0005 1px, transparent 1px)',
+          backgroundSize: '4px 4px'
+        }}
+      >
+        <div className="px-6 py-4 border-b border-[#2A2E39]">
+          <h2 className="text-lg font-medium text-(--color-neutral-100)">Ticker Pulse</h2>
+        </div>
+        
+        <div className="p-6">
+          <div className="mb-6">
+            <h3 className="text-lg font-medium text-(--color-neutral-100) mb-6">Market Analysis</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+              {tickerPulseStats && (
+                <>
+                  <StatCard
+                    label="Quality Score"
+                    value={tickerPulseStats.averageQualityScore || 0}
+                    unit="/100"
+                  />
+                  <StatCard
+                    label="Factual Accuracy"
+                    value={tickerPulseStats.factualAccuracyRate || 0}
+                    unit="%"
+                  />
+                  <StatCard
+                    label="Completeness"
+                    value={tickerPulseStats.completenessRate || 0}
+                    unit="%"
+                  />
+                  <StatCard
+                    label="Quality Pass Rate"
+                    value={tickerPulseStats.qualityRate || 0}
+                    unit="%"
+                  />
+                  <StatCard
+                    label="Hallucination-Free"
+                    value={tickerPulseStats.hallucinationFreeRate || 0}
                     unit="%"
                   />
                 </>
