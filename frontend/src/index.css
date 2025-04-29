@@ -41,10 +41,6 @@ label {
   color: var(--color-neutral-100);
 }
 
-div > div {
-  margin: 0;
-}
-
 /* Markdown Styles */
 .prose {
   color: var(--color-neutral-100);

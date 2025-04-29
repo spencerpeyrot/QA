@@ -34,4 +34,5 @@ yarn-error.log*
 
 # TypeScript
 *.tsbuildinfo
-next-env.d.ts backend/example_code/ltv_pipeline.py
+next-env.d.ts
+backend/example_code/ltv_pipeline.py

@@ -3,7 +3,7 @@ import { ReportVariables } from './components/ReportVariables'
 import { QAResponse } from './components/QAResponse'
 import { Analytics } from './components/Analytics'
 import { AutomatedQA } from './components/AutomatedQA'
-import { AutomatedAnalytics } from './components/AutomatedAnalytics'
+import AutomatedAnalytics from './components/AutomatedAnalytics'
 import { qaApi } from './services/api'
 
 const AGENT_SUBCOMPONENTS = {
@@ -74,7 +74,7 @@ const TEST_QA_RUN: QARun = {
 };
 
 function App() {
-  const [selectedTab, setSelectedTab] = useState<'qa' | 'analytics' | 'automated' | 'automated-analytics'>('qa');
+  const [selectedTab, setSelectedTab] = useState<'qa' | 'analytics' | 'automated' | 'automated_analytics'>('qa');
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [selectedSubComponent, setSelectedSubComponent] = useState<string>('');
   const [variables, setVariables] = useState<Record<string, string>>({});
@@ -347,7 +347,7 @@ function App() {
               }`}
               onClick={() => setSelectedTab('qa')}
             >
-              Manual QA
+              QA
               {selectedTab === 'qa' && (
                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
               )}
@@ -380,14 +380,14 @@ function App() {
             </button>
             <button
               className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-                selectedTab === 'automated-analytics'
+                selectedTab === 'automated_analytics'
                   ? 'text-(--color-accent)'
                   : 'text-(--color-neutral-500) hover:text-(--color-neutral-100)'
               }`}
-              onClick={() => setSelectedTab('automated-analytics')}
+              onClick={() => setSelectedTab('automated_analytics')}
             >
               Automated Analytics
-              {selectedTab === 'automated-analytics' && (
+              {selectedTab === 'automated_analytics' && (
                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-(--color-accent)" />
               )}
             </button>

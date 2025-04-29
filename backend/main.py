@@ -3,9 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from openai import AsyncOpenAI
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import json
 from prompt_manager import PromptManager
 from bson import ObjectId
@@ -30,10 +30,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize MongoDB client
-mongo_client = AsyncIOMotorClient(os.getenv("MONGODB_URL", "mongodb://localhost:27017"))
-db = mongo_client.qa_platform
-qa_evaluations = db.qa_evaluations
+# Initialize MongoDB clients
+EVAL_MONGO_URI = os.getenv('EVAL_MONGO_URI')
+if not EVAL_MONGO_URI:
+    raise ValueError("EVAL_MONGO_URI environment variable is not set")
+
+def get_async_mongo_client():
+    client = AsyncIOMotorClient(EVAL_MONGO_URI, tls=True, tlsAllowInvalidCertificates=True, minPoolSize=2, connectTimeoutMS=0)
+    return client
+
+# Initialize database connections
+qa_mongo_client = AsyncIOMotorClient(os.getenv("MONGODB_URL", "mongodb://localhost:27017"))
+automation_mongo_client = get_async_mongo_client()
+
+qa_db = qa_mongo_client.qa_platform
+qa_evaluations = qa_db.qa_evaluations
 
 # Initialize OpenAI client
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -52,6 +63,26 @@ class QAPassUpdate(BaseModel):
 
 class ReportPassUpdate(BaseModel):
     report_rating: int
+
+# New Pydantic models for evaluation stats
+class EvaluationMetrics(BaseModel):
+    factualAccuracyRate: float
+    completenessRate: float
+    qualityUsefulnessRate: float
+    hallucinationFreeRate: float
+    averageQualityScore: float
+    totalDocumentsEvaluated: int
+    documentsRequiringCorrection: int
+
+class AgentMetrics(BaseModel):
+    successRate: float
+    averageRunTime: float
+    totalRuns: int
+    failureRate: float
+    lastWeekTrend: str
+    commonErrors: List[str]
+    ltvMetrics: Optional[EvaluationMetrics] = None
+    tickerPulseMetrics: Optional[EvaluationMetrics] = None
 
 @app.get("/")
 async def root():
@@ -206,6 +237,179 @@ async def delete_qa_evaluation(qa_id: str):
         return {"status": "deleted", "deleted_id": qa_id}
     except Exception as e:
         logger.error(f"Error deleting QA evaluation {qa_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/evaluations/ltv")
+async def get_ltv_evaluations():
+    try:
+        # Use the automation MongoDB client
+        eval_db = automation_mongo_client['asc-fin-data']
+        eval_collection = eval_db['evaluations']
+        
+        logger.info("Connected to asc-fin-data database")
+        
+        # Find all LTV evaluations, sorted by timestamp
+        cursor = eval_collection.find(
+            {"pipeline": "LTV"},
+            {
+                "document_id": 1,
+                "user_question": 1,
+                "timestamp": 1,
+                "evaluated_at": 1,
+                "evaluation": {
+                    "factual_criteria": 1,
+                    "completeness_criteria": 1,
+                    "quality_criteria": 1,
+                    "hallucination_free": 1,
+                    "quality_score": 1,
+                    "criteria_explanations": 1,
+                    "unsupported_claims": 1,
+                    "score_explanation": 1
+                }
+            }
+        ).sort("timestamp", -1)
+        
+        # Convert cursor to list and format for JSON response
+        evaluations = []
+        async for doc in cursor:
+            # Convert ObjectId to string
+            doc["_id"] = str(doc["_id"])
+            evaluations.append(doc)
+            
+        logger.info(f"Found {len(evaluations)} LTV evaluations")
+        if len(evaluations) > 0:
+            logger.info(f"First evaluation: {evaluations[0]}")
+        
+        return evaluations
+        
+    except Exception as e:
+        logger.error(f"Error fetching LTV evaluations: {str(e)}")
+        logger.exception("Full traceback:")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/evaluations/ltv/test")
+async def create_test_ltv_evaluation():
+    try:
+        # Connect to the asc-fin-data database for evaluations
+        eval_db = automation_mongo_client['asc-fin-data']
+        eval_collection = eval_db['evaluations']
+        
+        # Create a test document based on the example
+        test_doc = {
+            "document_id": "680a7182a26c8e99cf8566e5",
+            "user_question": "US_Policy",
+            "timestamp": datetime.now(timezone.utc),
+            "evaluation": {
+                "factual_criteria": {
+                    "accurate_numbers": True,
+                    "correct_citations": True
+                },
+                "completeness_criteria": {
+                    "covers_macro_context": True,
+                    "includes_context": True
+                },
+                "quality_criteria": {
+                    "clear_presentation": True,
+                    "explains_causes": True
+                },
+                "hallucination_free": True,
+                "quality_score": 95,
+                "criteria_explanations": {
+                    "accurate_numbers": "All numerical values (inflation at 2.3%, unemployment at 4.2%, rates at 4.25%-4.50%, yields >4.9%, deficit $1.3T, tax plan $4.5T) match source figures.",
+                    "correct_citations": "Citations [1], [2], [10], [11], [6], [7], [4], [5] align correctly with the referenced source content.",
+                    "covers_macro_context": "Key themes (Fed dilemma, tariffs, global divergence, political pressure, market and fiscal impacts, global spillovers) reflect the major topics in the source documents.",
+                    "includes_context": "Provides cohesive context in 6 bullet points drawn from multiple sources, covering main trends and drivers.",
+                    "clear_presentation": "Information is structured in clear bullet points with headings and logical flow.",
+                    "explains_causes": "Each market movement is linked to drivers such as tariffs, policy divergence, political attacks and fiscal deficits.",
+                    "hallucination_free": "All statements are supported by the provided sources, with no extraneous claims."
+                },
+                "unsupported_claims": [],
+                "score_explanation": "The response accurately and comprehensively synthesizes information from multiple source documents, uses correct data and citations, and presents clear, logical analysis of drivers behind policy and market trends, deserving a high score."
+            },
+            "evaluated_at": datetime.now(timezone.utc),
+            "pipeline": "LTV"
+        }
+        
+        # Insert the test document
+        result = await eval_collection.insert_one(test_doc)
+        
+        logger.info(f"Inserted test document with ID: {result.inserted_id}")
+        
+        return {"message": "Test document created", "id": str(result.inserted_id)}
+        
+    except Exception as e:
+        logger.error(f"Error creating test evaluation: {str(e)}")
+        logger.exception("Full traceback:")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/evaluations/ltv/stats")
+async def get_ltv_evaluation_stats():
+    try:
+        # Use the automation MongoDB client
+        eval_db = automation_mongo_client['asc-fin-data']
+        eval_collection = eval_db['evaluations']
+        
+        # Find all LTV evaluations
+        cursor = eval_collection.find({"pipeline": "LTV"})
+        
+        total_count = 0
+        quality_score_sum = 0
+        factual_pass_count = 0
+        completeness_pass_count = 0
+        quality_pass_count = 0
+        hallucination_free_count = 0
+        
+        async for doc in cursor:
+            total_count += 1
+            evaluation = doc.get('evaluation', {})
+            
+            # Sum quality scores
+            quality_score_sum += evaluation.get('quality_score', 0)
+            
+            # Check factual criteria
+            factual_criteria = evaluation.get('factual_criteria', {})
+            if factual_criteria.get('accurate_numbers') and factual_criteria.get('correct_citations'):
+                factual_pass_count += 1
+            
+            # Check completeness criteria
+            completeness_criteria = evaluation.get('completeness_criteria', {})
+            if completeness_criteria.get('covers_macro_context') and completeness_criteria.get('includes_context'):
+                completeness_pass_count += 1
+            
+            # Check quality criteria
+            quality_criteria = evaluation.get('quality_criteria', {})
+            if quality_criteria.get('clear_presentation') and quality_criteria.get('explains_causes'):
+                quality_pass_count += 1
+            
+            # Check hallucination-free
+            if evaluation.get('hallucination_free'):
+                hallucination_free_count += 1
+        
+        if total_count > 0:
+            stats = {
+                "averageQualityScore": round(quality_score_sum / total_count, 1),
+                "factualAccuracyRate": round(factual_pass_count / total_count * 100, 1),
+                "completenessRate": round(completeness_pass_count / total_count * 100, 1),
+                "qualityRate": round(quality_pass_count / total_count * 100, 1),
+                "hallucinationFreeRate": round(hallucination_free_count / total_count * 100, 1),
+                "totalEvaluations": total_count
+            }
+        else:
+            stats = {
+                "averageQualityScore": 0,
+                "factualAccuracyRate": 0,
+                "completenessRate": 0,
+                "qualityRate": 0,
+                "hallucinationFreeRate": 0,
+                "totalEvaluations": 0
+            }
+            
+        logger.info(f"Calculated LTV evaluation stats: {stats}")
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error calculating LTV evaluation stats: {str(e)}")
+        logger.exception("Full traceback:")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
