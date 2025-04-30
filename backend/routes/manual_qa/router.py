@@ -5,6 +5,7 @@ import logging
 from openai import AsyncOpenAI
 import os
 from dotenv import load_dotenv
+from typing import List
 
 from models.qa_models import QARequest, QAPassUpdate, ReportPassUpdate
 from database.config import get_qa_collection
@@ -16,11 +17,39 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# Initialize OpenAI client
-openai_api_key = os.getenv("OPENAI_API_KEY")
-if not openai_api_key:
-    raise ValueError("OPENAI_API_KEY environment variable is not set")
-openai_client = AsyncOpenAI(api_key=openai_api_key)
+class OpenAIKeyManager:
+    def __init__(self):
+        # Get all API keys
+        self.api_keys = [
+            os.getenv("OPENAI_API_KEY"),
+            os.getenv("OPENAI_API_KEY_BACKUP1"),
+            os.getenv("OPENAI_API_KEY_BACKUP2")
+        ]
+        # Filter out None values
+        self.api_keys = [key for key in self.api_keys if key]
+        if not self.api_keys:
+            raise ValueError("No OpenAI API keys available")
+        self.current_key_index = 0
+        self._init_client()
+
+    def _init_client(self):
+        """Initialize or reinitialize the OpenAI client with the current API key"""
+        self.client = AsyncOpenAI(api_key=self.api_keys[self.current_key_index])
+        logger.info(f"Initialized OpenAI client with API key {self.current_key_index + 1}")
+
+    def rotate_key(self):
+        """Rotate to the next available API key"""
+        self.current_key_index = (self.current_key_index + 1) % len(self.api_keys)
+        self._init_client()
+        logger.info(f"Rotated to API key {self.current_key_index + 1}")
+        return self.client
+
+    def get_client(self):
+        """Get the current OpenAI client"""
+        return self.client
+
+# Initialize OpenAIKeyManager
+key_manager = OpenAIKeyManager()
 
 # Initialize PromptManager
 prompt_manager = PromptManager()
@@ -49,21 +78,39 @@ async def create_qa_evaluation(request: QARequest):
         template = prompt_manager.load_prompt(request.agent, request.sub_component)
         formatted_prompt = prompt_manager.format_prompt(template, request.variables)
         
-        # Call OpenAI
-        response = await openai_client.chat.completions.create(
-            model=os.getenv("DEFAULT_MODEL", "gpt-4-turbo-preview"),
-            messages=[
-                {"role": "system", "content": "You are a financial analysis QA expert. Your task is to evaluate the quality and accuracy of financial analysis reports."},
-                {"role": "user", "content": formatted_prompt}
-            ],
-            stream=True
-        )
+        max_retries = len(key_manager.api_keys)
+        retry_count = 0
         
-        # Stream and collect response
-        collected_response = ""
-        async for chunk in response:
-            if chunk.choices[0].delta.content:
-                collected_response += chunk.choices[0].delta.content
+        while retry_count < max_retries:
+            try:
+                # Get current OpenAI client
+                openai_client = key_manager.get_client()
+                
+                # Call OpenAI
+                response = await openai_client.chat.completions.create(
+                    model=os.getenv("DEFAULT_MODEL", "gpt-4-turbo-preview"),
+                    messages=[
+                        {"role": "system", "content": "You are a financial analysis QA expert. Your task is to evaluate the quality and accuracy of financial analysis reports."},
+                        {"role": "user", "content": formatted_prompt}
+                    ],
+                    stream=True
+                )
+                
+                # Stream and collect response
+                collected_response = ""
+                async for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        collected_response += chunk.choices[0].delta.content
+                        
+                break  # If successful, exit the retry loop
+                
+            except Exception as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    logger.warning(f"API call failed with key {key_manager.current_key_index + 1}, rotating to next key. Error: {str(e)}")
+                    key_manager.rotate_key()
+                else:
+                    raise  # If we've tried all keys, raise the last error
         
         # Create document with timestamp logging
         created_at = datetime.utcnow()
