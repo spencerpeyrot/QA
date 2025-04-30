@@ -120,6 +120,20 @@ const TrendIcon = ({ trend }: { trend: ComponentStats['lastWeekTrend'] }) => {
   }
 };
 
+const StatCardSkeleton = () => {
+  return (
+    <div className="bg-[#1a1d24] rounded-xl border border-[#2A2E39] p-6 animate-pulse">
+      <div className="flex flex-col gap-2">
+        <div className="h-4 w-24 bg-[#2A2E39] rounded"></div>
+        <div className="flex items-baseline gap-2">
+          <div className="h-8 w-16 bg-[#2A2E39] rounded"></div>
+          <div className="h-4 w-8 bg-[#2A2E39] rounded"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const StatCard = ({ label, value, unit }: { label: string; value: number; unit?: string }) => {
   const formattedValue = unit === '%' 
     ? value.toFixed(1)
@@ -407,13 +421,14 @@ const StatusCell: React.FC<StatusCellProps> = ({ value }) => {
 };
 
 const AutomatedAnalytics = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ltvStats, setLtvStats] = useState<LTVStats | null>(null);
   const [tickerPulseStats, setTickerPulseStats] = useState<LTVStats | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
+      setLoading(true);
       try {
         // Fetch LTV stats
         const ltvResponse = await fetch('http://localhost:8000/evaluations/ltv/stats');
@@ -433,19 +448,13 @@ const AutomatedAnalytics = () => {
       } catch (error) {
         console.error('Error fetching stats:', error);
         setError(error instanceof Error ? error.message : 'An error occurred');
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchStats();
   }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-(--color-neutral-500)">Loading statistics...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -454,6 +463,52 @@ const AutomatedAnalytics = () => {
       </div>
     );
   }
+
+  const renderStatCards = (stats: LTVStats | null) => {
+    if (loading) {
+      return (
+        <>
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </>
+      );
+    }
+
+    if (!stats) return null;
+
+    return (
+      <>
+        <StatCard
+          label="Quality Score"
+          value={stats.averageQualityScore || 0}
+          unit="/100"
+        />
+        <StatCard
+          label="Factual Accuracy"
+          value={stats.factualAccuracyRate || 0}
+          unit="%"
+        />
+        <StatCard
+          label="Completeness"
+          value={stats.completenessRate || 0}
+          unit="%"
+        />
+        <StatCard
+          label="Quality Pass Rate"
+          value={stats.qualityRate || 0}
+          unit="%"
+        />
+        <StatCard
+          label="Hallucination-Free"
+          value={stats.hallucinationFreeRate || 0}
+          unit="%"
+        />
+      </>
+    );
+  };
 
   return (
     <div className="space-y-8 m-6">
@@ -472,35 +527,7 @@ const AutomatedAnalytics = () => {
           <div className="mb-6">
             <h3 className="text-lg font-medium text-(--color-neutral-100) mb-6">Long Term View</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-              {ltvStats && (
-                <>
-                  <StatCard
-                    label="Quality Score"
-                    value={ltvStats.averageQualityScore || 0}
-                    unit="/100"
-                  />
-                  <StatCard
-                    label="Factual Accuracy"
-                    value={ltvStats.factualAccuracyRate || 0}
-                    unit="%"
-                  />
-                  <StatCard
-                    label="Completeness"
-                    value={ltvStats.completenessRate || 0}
-                    unit="%"
-                  />
-                  <StatCard
-                    label="Quality Pass Rate"
-                    value={ltvStats.qualityRate || 0}
-                    unit="%"
-                  />
-                  <StatCard
-                    label="Hallucination-Free"
-                    value={ltvStats.hallucinationFreeRate || 0}
-                    unit="%"
-                  />
-                </>
-              )}
+              {renderStatCards(ltvStats)}
             </div>
           </div>
         </div>
@@ -521,35 +548,7 @@ const AutomatedAnalytics = () => {
           <div className="mb-6">
             <h3 className="text-lg font-medium text-(--color-neutral-100) mb-6">Market Analysis</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-              {tickerPulseStats && (
-                <>
-                  <StatCard
-                    label="Quality Score"
-                    value={tickerPulseStats.averageQualityScore || 0}
-                    unit="/100"
-                  />
-                  <StatCard
-                    label="Factual Accuracy"
-                    value={tickerPulseStats.factualAccuracyRate || 0}
-                    unit="%"
-                  />
-                  <StatCard
-                    label="Completeness"
-                    value={tickerPulseStats.completenessRate || 0}
-                    unit="%"
-                  />
-                  <StatCard
-                    label="Quality Pass Rate"
-                    value={tickerPulseStats.qualityRate || 0}
-                    unit="%"
-                  />
-                  <StatCard
-                    label="Hallucination-Free"
-                    value={tickerPulseStats.hallucinationFreeRate || 0}
-                    unit="%"
-                  />
-                </>
-              )}
+              {renderStatCards(tickerPulseStats)}
             </div>
           </div>
         </div>
