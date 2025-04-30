@@ -88,7 +88,7 @@ async def create_qa_evaluation(request: QARequest):
                 
                 # Call OpenAI
                 response = await openai_client.chat.completions.create(
-                    model=os.getenv("DEFAULT_MODEL", "gpt-4-turbo-preview"),
+                    model=os.getenv("DEFAULT_MODEL", "gpt-4o-mini-search-preview-2025-03-11"),
                     messages=[
                         {"role": "system", "content": "You are a financial analysis QA expert. Your task is to evaluate the quality and accuracy of financial analysis reports."},
                         {"role": "user", "content": formatted_prompt}
@@ -124,7 +124,7 @@ async def create_qa_evaluation(request: QARequest):
             "sub_component": request.sub_component,
             "variables": request.variables,
             "injected_date": request.variables["current_date"],
-            "openai_model": os.getenv("DEFAULT_MODEL", "gpt-4-turbo-preview"),
+            "openai_model": os.getenv("DEFAULT_MODEL", "gpt-4o-mini-search-preview-2025-03-11"),
             "response_markdown": collected_response,
             "qa_pass": None,
             "report_pass": None,

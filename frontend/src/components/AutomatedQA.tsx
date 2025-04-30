@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { pipelineApi } from '../services/pipelineApi';
 
@@ -96,11 +96,6 @@ const PIPELINE_DATA: PipelineData = {
   }
 };
 
-// Add new interface for active runs
-interface ActiveRuns {
-  [key: string]: boolean;
-}
-
 const StatusIcon = ({ status }: { status: PipelineStatus['status'] }) => {
   switch (status) {
     case 'completed':
@@ -173,31 +168,59 @@ const PipelineRow = ({
 };
 
 export function AutomatedQA() {
-  const [activeRuns, setActiveRuns] = useState<ActiveRuns>({});
+  const [activeRuns, setActiveRuns] = useState<{ [key: string]: boolean }>({});
   const [error, setError] = useState<string | null>(null);
+  const [pipelineStatus, setPipelineStatus] = useState<'not_started' | 'running' | 'completed' | 'failed'>('not_started');
+
+  // Poll for status when pipeline is running
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    const pollStatus = async () => {
+      try {
+        const status = await pipelineApi.getPipelineStatus();
+        if (status.status === 'completed' || status.status === 'failed') {
+          setActiveRuns({});
+          setPipelineStatus(status.status);
+          if (status.error) {
+            setError(status.error);
+          }
+        }
+      } catch (err: any) {
+        console.error('Error polling status:', err);
+      }
+    };
+
+    if (Object.values(activeRuns).some(Boolean)) {
+      intervalId = setInterval(pollStatus, 5000); // Poll every 5 seconds
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [activeRuns]);
 
   const handleRunPipeline = async (agent: string, subComponent: string) => {
     const runKey = `${agent}-${subComponent}`;
     
     try {
       setError(null);
+      setPipelineStatus('running');
       setActiveRuns(prev => ({ ...prev, [runKey]: true }));
 
       // Only run if it's Agent M - Long Term View for now
       if (agent === 'Agent M' && subComponent === 'Long Term View') {
         const response = await pipelineApi.runLTVPipeline(agent, subComponent);
         console.log('Pipeline run response:', response);
-        
-        // TODO: Poll for status updates
-        // For now, we'll just set a timeout to simulate the pipeline running
-        await new Promise(resolve => setTimeout(resolve, 3000));
       } else {
         throw new Error('This pipeline is not yet implemented');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to run pipeline');
+      setPipelineStatus('failed');
       console.error('Pipeline run error:', err);
-    } finally {
       setActiveRuns(prev => ({ ...prev, [runKey]: false }));
     }
   };
