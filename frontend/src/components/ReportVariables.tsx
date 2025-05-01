@@ -140,12 +140,12 @@ export function ReportVariables({ agent, subComponent, onVariablesChange, onRunQ
               />
             ) : (
               <input
-                type={field === 'current_date' ? 'date' : field.includes('price') ? 'number' : 'text'}
+                type={field === 'current_date' || field === 'prev_trading_day' ? 'date' : field.includes('price') ? 'number' : 'text'}
                 id={field}
                 value={variables[field] || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
                 className={`w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)
-                  ${field === 'current_date' ? '[color-scheme:dark]' : ''}`}
+                  ${(field === 'current_date' || field === 'prev_trading_day') ? '[color-scheme:dark]' : ''}`}
                 placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
                 disabled={isLoading}
               />
