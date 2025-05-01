@@ -21,13 +21,13 @@
       "variables": ["current_date", "ticker", "current_price", "report_text"]
     },
     "Volume Analysis": {
-      "variables": ["current_date", "ticker", "report_text"]
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
     },
     "Candlestick Patterns": {
-      "variables": ["current_date", "ticker", "report_text"]
+      "variables": ["current_date", "ticker", "current_price", "report_text"]
     },
     "Consolidated Analysis": {
-      "variables": ["current_date", "ticker", "current_price", "report_text"]
+      "variables": ["current_date", "ticker", "current_price", "support_resistance_analysis", "volume_analysis", "candlestick_analysis", "consolidated_analysis"]
     }
   },
   "Agent O": {

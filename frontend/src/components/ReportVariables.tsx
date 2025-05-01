@@ -36,9 +36,9 @@ const REQUIRED_VARIABLES: RequiredVariables = {
   },
   'Agent Q': {
     'Support & Resistance': ['current_date', 'ticker', 'current_price', 'report_text'],
-    'Volume Analysis': ['current_date', 'ticker', 'report_text'],
-    'Candlestick Patterns': ['current_date', 'ticker', 'report_text'],
-    'Consolidated Analysis': ['current_date', 'ticker', 'current_price', 'report_text']
+    'Volume Analysis': ['current_date', 'ticker', 'current_price', 'report_text'],
+    'Candlestick Patterns': ['current_date', 'ticker', 'current_price', 'report_text'],
+    'Consolidated Analysis': ['current_date', 'ticker', 'current_price', 'support_resistance_analysis', 'volume_analysis', 'candlestick_analysis', 'consolidated_analysis']
   },
   'Agent O': {
     'Flow Analysis': ['current_date', 'ticker', 'current_price', 'report_text'],
