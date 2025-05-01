@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = '/ltv';
+const API_BASE_URL = 'http://localhost:8000';
 
 interface PipelineRunResponse {
   status: 'running' | 'completed' | 'failed';
@@ -34,11 +34,12 @@ interface PipelineStatusResponse {
 }
 
 export const pipelineApi = {
+  // LTV Pipeline endpoints
   async runLTVPipeline(agent: string, subComponent: string): Promise<PipelineRunResponse> {
     console.log(`[API] Starting LTV pipeline for ${agent} - ${subComponent}`);
     try {
-      console.log(`[API] Making POST request to ${BASE_URL}/run`);
-      const response = await axios.post<PipelineRunResponse>(`${BASE_URL}/run`);
+      console.log(`[API] Making POST request to /ltv/run`);
+      const response = await axios.post<PipelineRunResponse>(`${API_BASE_URL}/ltv/run`);
       console.log('[API] Pipeline run response:', response.data);
       return response.data;
     } catch (error: any) {
@@ -56,10 +57,33 @@ export const pipelineApi = {
     }
   },
 
+  // Ticker Pulse Pipeline endpoints
+  async runTickerPulsePipeline(agent: string, subComponent: string): Promise<PipelineRunResponse> {
+    console.log(`[API] Starting Ticker Pulse pipeline for ${agent} - ${subComponent}`);
+    try {
+      console.log(`[API] Making POST request to /tp/run`);
+      const response = await axios.post<PipelineRunResponse>(`${API_BASE_URL}/tp/run`);
+      console.log('[API] Pipeline run response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('[API] Error running Ticker Pulse pipeline:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+        }
+      });
+      throw new Error(error.response?.data?.detail || 'Failed to run Ticker Pulse pipeline');
+    }
+  },
+
   async getPipelineStatus(): Promise<PipelineStatusResponse> {
     console.log('[API] Checking pipeline status');
     try {
-      const response = await axios.get<PipelineStatusResponse>(`${BASE_URL}/status`);
+      const response = await axios.get<PipelineStatusResponse>(`${API_BASE_URL}/ltv/status`);
       console.log('[API] Pipeline status response:', response.data);
       return response.data;
     } catch (error: any) {

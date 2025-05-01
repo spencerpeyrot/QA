@@ -9,6 +9,7 @@ import logging
 from routes.manual_qa.router import router as manual_qa_router
 from routes.automated_qa.router import router as automated_qa_router
 from routes.automated_qa.ltv_router import router as ltv_router
+from routes.automated_qa.tp_router import router as tp_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,7 @@ async def root():
 app.include_router(manual_qa_router)
 app.include_router(automated_qa_router)
 app.include_router(ltv_router)
+app.include_router(tp_router)
 
 if __name__ == "__main__":
     import uvicorn

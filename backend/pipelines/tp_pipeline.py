@@ -18,26 +18,6 @@ MONGO_URI=os.getenv("EVAL_MONGO_URI")
 
 OPENAI_API_KEYS = [k for k in (OPENAI_API_KEY, OPENAI_API_KEY_BACKUP1, OPENAI_API_KEY_BACKUP2) if k]
 
-ltv_keys_macro_context = [
-    "US_Growth",
-    "US_Consumer Defensive",
-    "US_Healthcare",
-    "US_Utilities",
-    "US_Geopolitics",
-    "US_Real Estate",
-    "US_Inflation",
-    "US_Policy",
-    "US_Jobs",
-    "US_Technology", 
-    "US_Energy",
-    "US_Industrials",
-    "US_Consumer Sentiment",
-    "US_Basic Materials",
-    "US_Communication Services",
-    "US_Consumer Cyclical",
-    "US_Financial Services"
-]
-
 evaluation_schema = {
     "name": "evaluate_response",
     "description": "Evaluate a financial report response against source documents and for overall quality",
@@ -49,11 +29,11 @@ evaluation_schema = {
                 "properties": {
                     "accurate_numbers": {
                         "type": "boolean",
-                        "description": "True if all data points such as percentages, trends, and numbers in the response are accurate and match the content either the MACRO RELEASES or the SOURCE DOCUMENTS, depending on where it was sourced from. Return True if not applicable."
+                        "description": "True if all reported numbers match the content from the RELEVANT STATS section OR the SOURCE DOCUMENTS, depending on where it was sourced from."
                     },
                     "correct_citations": {
                         "type": "boolean",
-                        "description": "True if references to sources [1], [2], etc. correctly match the content from the SOURCE DOCUMENTS dictionary citation number (keys) and the content (values) from the SOURCE DOCUMENTS dictionary. Feel free to ignore references to the MACRO RELEASES and [Background Information]: they are not part of this evaluation."
+                        "description": "True if references to sources [1], [2], etc. correctly match the content from the SOURCE DOCUMENTS dictionary citation number (keys) and the content (values) from the SOURCE DOCUMENTS dictionary"
                     },
                 },
                 "required": ["accurate_numbers", "correct_citations"]
@@ -61,16 +41,16 @@ evaluation_schema = {
             "completeness_criteria": {
                 "type": "object",
                 "properties": {
-                    "covers_macro_context": {
+                    "covers_momentum": {
                         "type": "boolean",
-                        "description": "True if the report captures key macro-economic or sector-wide trends, challenges, and opportunities from the SOURCE DOCUMENTS, if provided. It is not required to cover the MACRO RELEASES section, only if relevant."
+                        "description": "True if response includes description of how the ticker is currently performing in the market, and potential drivers of that performance from the SOURCE DOCUMENTS"
                     },
                     "includes_context": {
                         "type": "boolean",
-                        "description": "True if sufficient context is provided to relevant information and trends about the macro-economic or sector-wide trends, in about 3-5 bullet points from diverse sources if provided in the SOURCE DOCUMENTS. No need to cover all the sources, just a small selection that provide relevant context. It is not required to cover the MACRO RELEASES section, only if relevant."
+                        "description": "True if sufficient context is provided to understand the ticker price action, in about 3-5 bullet points from diverse sources if provided in the SOURCE DOCUMENTS. No need to cover all the sources, just a small selection that provide relevant context."
                     }
                 },
-                "required": ["covers_macro_context", "includes_context"]
+                "required": ["covers_momentum", "includes_context"]
             },
             "quality_criteria": {
                 "type": "object",
@@ -88,7 +68,7 @@ evaluation_schema = {
             },
             "hallucination_free": {
                 "type": "boolean",
-                "description": "False if there are any particular details in this report unsupported by the the material in the MACRO RELEASES or the SOURCE DOCUMENTS. Note that common market knowledge, straightforward inferences, and minor editorial liberties are allowed and thus does not count as hallucination. Thus, mark True if the response is a natural extension of the sources, or if it is a common-sense interpretation of the sources."
+                "description": "False if there are any particular details in this report unsupported by the sources. Note that common market knowledge, straightforward inferences, and minor editorial liberties are allowed and thus does not count as hallucination. Thus, mark True if the response is a natural extension of the sources, or if it is a common-sense interpretation of the sources."
             },
             "quality_score": {
                 "type": "integer",
@@ -102,7 +82,7 @@ evaluation_schema = {
                 "properties": {
                     "accurate_numbers": {"type": "string"},
                     "correct_citations": {"type": "string"},
-                    "covers_macro_context": {"type": "string"},
+                    "covers_momentum": {"type": "string"},
                     "includes_context": {"type": "string"},
                     "clear_presentation": {"type": "string"},
                     "explains_causes": {"type": "string"},
@@ -139,11 +119,11 @@ def get_async_mongo_client():
 
 
 # Configuration
-EVAL_SAMPLE_SIZE = 25  # Number of documents to sample per day
+EVAL_SAMPLE_SIZE = 100  # Number of documents to sample per day
 OPENAI_MODEL = "o4-mini"  # Or "claude-3-opus" if using Anthropic
 MONGODB_EVAL_COLLECTION = "evaluations"  # Where to store evaluation results
 
-class MacroLTVEvaluator:
+class TickerPulseEvaluator:
     def __init__(self, mongo_uri: str, daily_sample_size: int = EVAL_SAMPLE_SIZE):
         self.client = AsyncIOMotorClient(
             mongo_uri,
@@ -156,23 +136,22 @@ class MacroLTVEvaluator:
         self.source_collection = self.source_db['user_activities']
         self.eval_collection = self.source_db[MONGODB_EVAL_COLLECTION]
         self.daily_sample_size = daily_sample_size
-        
+
     async def sample_documents(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Sample random documents from a specific date range."""
         # Using aggregation pipeline to find documents with 3+ source_docs
         pipeline = [
             {
                 "$match": {
-                    "agent": "neo",
-                    "mode": "LTV",
+                    "agent": "dpr",
+                    "mode": "TICKER-PULSE",
                     "timestamp": {"$gte": start_date, "$lt": end_date},
-                    "agent_sources": {"$exists": True},
-                    "user_question": {"$in": ltv_keys_macro_context}
+                    "agent_response.source_docs": {"$exists": True}
                 }
             },
             {
                 "$addFields": {
-                    "source_docs_count": {"$size": {"$ifNull": [{"$objectToArray": "$agent_sources"}, []]}}
+                    "source_docs_count": {"$size": {"$ifNull": [{"$objectToArray": "$agent_response.source_docs"}, []]}}
                 }
             },
             {
@@ -193,70 +172,45 @@ class MacroLTVEvaluator:
         sampled_docs = random.sample(all_docs, self.daily_sample_size)
         return sampled_docs
 
-    async def evaluate_document(self, doc: Dict[str, Any]) -> Dict[str, Any]:
+    async def evaluate_document(self, doc: Dict[str, Any], corrected: bool = False) -> Dict[str, Any]:
         """Submit document to LLM for evaluation using function calling."""
         # Define the function schema
 
         # Create user prompt with context
+        response_doc = doc.get("agent_response", {})
+        if not corrected:
+            ticker_response = response_doc.get("response_ticker", "")
+        else:
+            ticker_response = response_doc.get("corrected_response_ticker", "")
 
-        agent_response = doc.get("agent_response", "")
-        user_question = doc.get("user_question", "")
-        agent_sources = doc.get("agent_sources", {})
-        print(f'Processing ltv output for {user_question}')
+        relevant_stats = json.dumps(response_doc.get("relevant_stats", {}), indent=2)
+        ticker = response_doc.get("relevant_stats", {}).get("symbol", "")
+        print(f'Processing ticker pulse output for {ticker}')
+        headline = response_doc.get("headline", "")
         
-        doc_timestamp = doc.get("timestamp")
-
-        catalyst_doc = await self.get_nearest_catalyst_document(doc_timestamp)
-        catalyst_content = ""
-        if catalyst_doc:
-            catalyst_response = catalyst_doc.get("agent_response", "")
-            # catalyst_timestamp = catalyst_doc.get("timestamp")
-            # time_diff = doc_timestamp - catalyst_timestamp if doc_timestamp and catalyst_timestamp else None
-            # time_diff_str = f"{time_diff.total_seconds() / 3600:.1f} hours" if time_diff else "unknown time"
-            
-            catalyst_content = f"""
-    RELATED CATALYST DOCUMENT:
-    {catalyst_response}
-    """
-
         # Extract and format source documents
+        source_docs = response_doc.get("source_docs", {})
         source_texts = []
-        for key, value in agent_sources.items():
-            metadata_text = ""
-            
-            # Add metadata if available
-            if "metadata" in value:
-                metadata = value["metadata"]
-                
-                if "title" in metadata:
-                    metadata_text += f"Title: {metadata['title']}\n"
-                if "source" in metadata:
-                    metadata_text += f"Source: {metadata['source']}\n"
-                if "url" in metadata:
-                    metadata_text += f"URL: {metadata['url']}\n"
-                if "description" in metadata and metadata["description"]:
-                    metadata_text += f"Description: {metadata['description']}\n"
-                if "summary" in metadata and metadata["summary"]:
-                    metadata_text += f"Summary: {metadata['summary']}\n"
-            
-            # Add the source text with metadata
+        for key, value in source_docs.items():
             if "text" in value:
-                source_text = f"Source [{key}]:\n{metadata_text}\n{value['text']}"
-                source_texts.append(source_text)
-
-        source_docs_formatted = "\n\n" + "\n\n".join(source_texts)
+                source_texts.append(f"Source [{key}]: {value['text']}...")
+        
+        source_docs_formatted = "\n\n".join(source_texts)
         
         user_prompt = f"""
-    Evaluate this financial resport on a macro-theme or sector against the source documents:
+    Evaluate this financial ticker response against the source documents:
 
-    MACRO-THEME OR SECTOR:
-    {user_question}
+    TICKER:
+    {ticker}
 
-    MACRO-THEME OR SECTOR RESPONSE:
-    {agent_response}
+    TICKER RESPONSE:
+    {ticker_response}
 
-    MACRO RELEASES:
-    {catalyst_content}
+    HEADLINE:
+    {headline}
+
+    RELEVANT STATS:
+    {relevant_stats}
 
     SOURCE DOCUMENTS:
     {source_docs_formatted}
@@ -266,7 +220,7 @@ class MacroLTVEvaluator:
     List any statements not supported by the sources.
     """
 
-        system_prompt = """You are an expert financial evaluator. Assess financial macro-theme or sector responses against source documents using TRUE/FALSE criteria. Be objective and thorough in your evaluation."""
+        system_prompt = """You are an expert financial evaluator. Assess financial ticker responses against source documents using TRUE/FALSE criteria. Be objective and thorough in your evaluation."""
         
         # print(user_prompt)
         # print(system_prompt)
@@ -291,12 +245,11 @@ class MacroLTVEvaluator:
             tool_calls = response.choices[0].message.tool_calls
             if tool_calls and len(tool_calls) > 0:
                 function_response = json.loads(tool_calls[0].function.arguments)
-                # print(f'Eval for doc {doc.get("_id", "")} is {function_response}')
-
+                
                 # Return the evaluation result
                 return {
                     "document_id": str(doc.get("_id", "")),
-                    "user_question": user_question,
+                    "ticker": ticker,
                     "timestamp": doc.get("timestamp"),
                     "evaluation": function_response,
                     "evaluated_at": datetime.now(timezone.utc)
@@ -304,7 +257,7 @@ class MacroLTVEvaluator:
             else:
                 return {
                     "document_id": str(doc.get("_id", "")),
-                    "user_question": user_question,
+                    "ticker": ticker,
                     "timestamp": doc.get("timestamp"),
                     "evaluation": {"error": "No function response received"},
                     "evaluated_at": datetime.now(timezone.utc)
@@ -314,7 +267,7 @@ class MacroLTVEvaluator:
             # Handle errors
             return {
                 "document_id": str(doc.get("_id", "")),
-                "user_question": user_question,
+                "ticker": ticker,
                 "timestamp": doc.get("timestamp"),
                 "evaluation": {"error": f"Evaluation failed: {str(e)}"},
                 "evaluated_at": datetime.now(timezone.utc)
@@ -375,7 +328,7 @@ class MacroLTVEvaluator:
                     evaluation = await self.evaluate_document(doc)
                     
                     # Add pipeline name
-                    evaluation["pipeline"] = "LTV"
+                    evaluation["pipeline"] = "TICKER-PULSE"
 
                     # if score is based on 0-5, multiply by 20 to convert to 0-100
                     if "quality_score" in evaluation["evaluation"] and evaluation["evaluation"]["quality_score"] <= 5:
@@ -475,52 +428,16 @@ class MacroLTVEvaluator:
         results["market_days_skipped"] = results.get("days_skipped", 0)
         
         return results
-
-    async def get_nearest_catalyst_document(self, doc_timestamp: datetime) -> Dict[str, Any]:
-        """Find the most recent catalysts_macro_US_LTV document with timestamp not exceeding doc_timestamp."""
-        try:
-            one_day_prior = doc_timestamp - timedelta(days=1)
-
-            pipeline = [
-                {
-                    "$match": {
-                        "mode": "catalysts_macro_US_LTV",
-                        "timestamp": {
-                            "$lte": doc_timestamp,
-                            "$gte": one_day_prior
-                        },
-                        "agent_response": {"$exists": True}
-                    }
-                },
-                {
-                    "$sort": {
-                        "timestamp": -1  # Sort by timestamp descending (most recent first)
-                    }
-                },
-                {
-                    "$limit": 1  # Only get the most recent document
-                }
-            ]
-            
-            # Execute the aggregation pipeline
-            cursor = self.source_collection.aggregate(pipeline)
-            results = await cursor.to_list(length=1)
-            
-            # Return the document if found, otherwise None
-            return results[0] if results else None
-        except Exception as e:
-            print(f"Error fetching catalyst document: {e}")
-            return None
-
+        
     async def find_failed_hallucination_checks(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Find evaluations that failed the hallucination check."""
         pipeline = [
             {
                 "$match": {
-                    "pipeline": "LTV",
+                    "pipeline": "TICKER-PULSE",
                     "timestamp": {"$gte": start_date, "$lt": end_date},
                     "evaluation.hallucination_free": False,
-                    "corrected": {"$exists": False}  # Only get uncorrected documents
+                    "with_corrections": {"$exists": False}  # Only get uncorrected documents
                 }
             }
         ]
@@ -538,125 +455,94 @@ class MacroLTVEvaluator:
         
         # Format based on document mode
         return await self._correct_doc(original_doc, evaluation_doc)
-
+    
     async def _correct_doc(self, original_doc: Dict[str, Any], evaluation_doc: Dict[str, Any]) -> Dict[str, Any]:
-        """Correct an LTV document."""
-        agent_response = original_doc.get("agent_response", "")
-        user_question = original_doc.get("user_question", "")
-        agent_sources = original_doc.get("agent_sources", {})
-        doc_timestamp = original_doc.get("timestamp")
-        
-        # Get the catalyst document as in the original evaluation
-        catalyst_doc = await self.get_nearest_catalyst_document(doc_timestamp)
-        catalyst_content = ""
-        if catalyst_doc:
-            catalyst_response = catalyst_doc.get("agent_response", "")
-            catalyst_content = f"""
-    RELATED CATALYST DOCUMENT:
-    {catalyst_response}
-    """
-        
+        """Correct a TICKER-PULSE document."""
+        response_doc = original_doc.get("agent_response", {})
+        ticker_response = response_doc.get("response_ticker", "")
+        ticker = response_doc.get("relevant_stats", {}).get("symbol", "")
+        relevant_stats = json.dumps(response_doc.get("relevant_stats", {}), indent=2)
         # Extract evaluation feedback
         evaluation = evaluation_doc.get("evaluation", {})
-        unsupported_claims = evaluation.get("unsupported_claims", [])
+                
+        # Format source documents
+        source_docs = response_doc.get("source_docs", {})
+        source_texts = []
+        for key, value in source_docs.items():
+            if "text" in value:
+                source_texts.append(f"Source [{key}]: {value['text']}")
         
-        # Build specific correction instructions based on failing criteria
+        source_docs_formatted = "\n\n".join(source_texts)
+        
+
         correction_instructions = []
         
-        # Check hallucinations
-        if not evaluation.get("hallucination_free", True):
-            hallucination_explanation = evaluation.get("criteria_explanations", {}).get("hallucination_free", "")
-            correction_instructions.append(f"HALLUCINATION ISSUES: {hallucination_explanation}")
-            if unsupported_claims:
-                correction_instructions.append("Unsupported claims to remove or correct:")
-                for claim in unsupported_claims:
-                    correction_instructions.append(f"- {claim}")
+        # Check completeness issues
+        completeness_criteria = evaluation.get("completeness_criteria", {})
+        if not completeness_criteria.get("covers_momentum", True):
+            momentum_explanation = evaluation.get("criteria_explanations", {}).get("covers_momentum", "")
+            correction_instructions.append(f"MOMENTUM COVERAGE ISSUE: {momentum_explanation}")
+        
+        if not completeness_criteria.get("includes_context", True):
+            context_explanation = evaluation.get("criteria_explanations", {}).get("includes_context", "")
+            correction_instructions.append(f"CONTEXT ISSUE: {context_explanation}")
         
         # Check factual accuracy issues
         factual_criteria = evaluation.get("factual_criteria", {})
         if not factual_criteria.get("accurate_numbers", True):
             accuracy_explanation = evaluation.get("criteria_explanations", {}).get("accurate_numbers", "")
-            correction_instructions.append(f"NUMBER ACCURACY ISSUE: {accuracy_explanation}")
-            correction_instructions.append("- Ensure all data points, percentages, trends, and numbers are accurate and match the content in the sources")
+            correction_instructions.append(f"NUMBERS ACCURACY ISSUES: {accuracy_explanation}")
         
         if not factual_criteria.get("correct_citations", True):
             citation_explanation = evaluation.get("criteria_explanations", {}).get("correct_citations", "")
-            correction_instructions.append(f"CITATION ISSUE: {citation_explanation}")
-            correction_instructions.append("- Ensure references to sources [1], [2], etc. correctly match the source documents")
-        
-        # Check completeness issues
-        completeness_criteria = evaluation.get("completeness_criteria", {})
-        if not completeness_criteria.get("covers_macro_context", True):
-            context_explanation = evaluation.get("criteria_explanations", {}).get("covers_macro_context", "")
-            correction_instructions.append(f"MACRO CONTEXT COVERAGE ISSUE: {context_explanation}")
-            correction_instructions.append("- Ensure the report captures key macro-economic or sector-wide trends, challenges, and opportunities")
-        
-        if not completeness_criteria.get("includes_context", True):
-            context_explanation = evaluation.get("criteria_explanations", {}).get("includes_context", "")
-            correction_instructions.append(f"CONTEXT ISSUE: {context_explanation}")
-            correction_instructions.append("- Add sufficient context about macro-economic or sector-wide trends from diverse sources")
-        
-        # Format source documents
-        source_texts = []
-        for key, value in agent_sources.items():
-            metadata_text = ""
-            
-            # Add metadata if available
-            if "metadata" in value:
-                metadata = value["metadata"]
-                
-                if "title" in metadata:
-                    metadata_text += f"Title: {metadata['title']}\n"
-                if "source" in metadata:
-                    metadata_text += f"Source: {metadata['source']}\n"
-                if "url" in metadata:
-                    metadata_text += f"URL: {metadata['url']}\n"
-                if "description" in metadata and metadata["description"]:
-                    metadata_text += f"Description: {metadata['description']}\n"
-                if "summary" in metadata and metadata["summary"]:
-                    metadata_text += f"Summary: {metadata['summary']}\n"
-            
-            # Add the source text with metadata
-            if "text" in value:
-                source_text = f"Source [{key}]:\n{metadata_text}\n{value['text']}"
-                source_texts.append(source_text)
+            correction_instructions.append(f"CITATION ISSUES: {citation_explanation}")
 
-        source_docs_formatted = "\n\n" + "\n\n".join(source_texts)
-        
-        # Join all correction instructions
+        # Check hallucinations
+        if not evaluation.get("hallucination_free", True):
+            hallucination_explanation = evaluation.get("criteria_explanations", {}).get("hallucination_free", "")
+            unsupported_claims = evaluation.get("unsupported_claims", [])
+            
+            correction_instructions.append(f"HALLUCINATION ISSUES: {hallucination_explanation}")
+            if unsupported_claims:
+                correction_instructions.append("Unsupported claims to remove or correct:")
+                for claim in unsupported_claims:
+                    correction_instructions.append(f"- {claim}")
+
         correction_instructions_text = "\n".join(correction_instructions)
-        
+
         # Create correction prompt
-        system_prompt = """You are an expert financial content corrector. Your task is to correct hallucinations and other issues in financial macro-theme or sector reports while preserving accurate information. Make minimal changes necessary to fix the identified issues. Keep the tone, structure, and length similar to the original."""
+        system_prompt = """You are an expert financial content corrector. Your task is to correct hallucinations in financial ticker reports while preserving accurate information. Make minimal changes necessary to eliminate unsupported claims. Keep the tone, structure, and length similar to the original."""
         
         user_prompt = f"""
-    Please correct the following financial report on a macro-theme or sector that contains specific issues identified by our evaluation system.
+Please correct the following ticker report that contains hallucinations or unsupported claims.
 
-    MACRO-THEME OR SECTOR:
-    {user_question}
+TICKER: {ticker}
 
-    ORIGINAL REPORT:
-    {agent_response}
+TICKER:
+{ticker}
 
-    MACRO RELEASES:
-    {catalyst_content}
+ORIGINAL REPORT:
+{ticker_response}
 
-    SOURCE DOCUMENTS:
-    {source_docs_formatted}
+RELEVANT STATS:
+{relevant_stats}
 
-    EXCEPTIONS RAISED BY THE EVALUATION:
-    {correction_instructions_text}
+SOURCE DOCUMENTS:
+{source_docs_formatted}
 
-    INSTRUCTIONS:
-    1. Correct only the problematic content highlighted by EXCEPTIONS RAISED BY THE EVALUATION while preserving accurate information from the original report
-    2. For hallucinations and accuracy issues: remove or correct unsupported claims and add the missing information from RELEVANT STATS or SOURCE DOCUMENTS
-    3. For incorrect citations or misrepresentations of source documents: add the correct citations from SOURCE DOCUMENTS and make sure the bullet points are faithful to the cited source
-    4. For completeness issues: add the missing information from RELEVANT STATS or context from SOURCE DOCUMENTS
-    5. Maintain the same overall structure, tone, and length where corrections are not needed.
-    6. Return ONLY the corrected report, with no explanations or commentary
+EXCEPTIONS RAISED BY THE EVALUATION:
+{correction_instructions_text}
 
-    CORRECTED REPORT:
-    """
+INSTRUCTIONS:
+1. Correct only the problematic content highlighted by EXCEPTIONS RAISED BY THE EVALUATION while preserving accurate information from the original report
+2. For hallucinations and accuracy issues: remove or correct unsupported claims and add the missing information from RELEVANT STATS or SOURCE DOCUMENTS
+3. For incorrect citations or misrepresentations of source documents: add the correct citations from SOURCE DOCUMENTS and make sure the bullet points are faithful to the cited source
+4. For completeness issues: add the missing information from RELEVANT STATS or context from SOURCE DOCUMENTS
+5. Maintain the same overall structure, tone, and length where corrections are not needed.
+6. Return ONLY the corrected report, with no explanations or commentary
+
+CORRECTED REPORT:
+"""
 
         # print(user_prompt)
 
@@ -678,8 +564,8 @@ class MacroLTVEvaluator:
             # Return the corrected document
             return {
                 "document_id": str(original_doc.get("_id", "")),
-                "user_question": user_question,
-                "original_response": agent_response,
+                "ticker": ticker,
+                "original_response": ticker_response,
                 "corrected_response": corrected_content,
                 "corrected_at": datetime.now(timezone.utc)
             }
@@ -688,10 +574,10 @@ class MacroLTVEvaluator:
             # Handle errors
             return {
                 "document_id": str(original_doc.get("_id", "")),
-                "user_question": user_question,
+                "ticker": ticker,
                 "error": f"Correction failed: {str(e)}"
             }
-
+    
     async def update_original_document(self, correction_result: Dict[str, Any]) -> bool:
         """Update the original document with the corrected response."""
         if "error" in correction_result:
@@ -700,13 +586,13 @@ class MacroLTVEvaluator:
         doc_id = correction_result.get("document_id")
         corrected_response = correction_result.get("corrected_response")
         
-        try:
+        try:    
             update_result = await self.source_collection.update_one(
                 {"_id": ObjectId(doc_id)},
                 {"$set": {
-                    "corrected_agent_response": corrected_response,
+                    "agent_response.corrected_response_ticker": corrected_response,
                     "corrected_timestamp": datetime.now(timezone.utc),
-                    "corrected": True,
+                    "with_corrections": True,
                 }}
             )
 
@@ -715,7 +601,7 @@ class MacroLTVEvaluator:
         except Exception as e:
             print(f"Error updating original document: {e}")
             return False
-
+    
     async def re_evaluate_corrected_document(self, correction_result: Dict[str, Any]) -> Dict[str, Any]:
         """Re-evaluate the corrected document."""
         if "error" in correction_result:
@@ -724,6 +610,7 @@ class MacroLTVEvaluator:
         doc_id = correction_result.get("document_id")
         
         try:
+
             original_doc = await self.source_collection.find_one({"_id": ObjectId(doc_id)})
             
             if not original_doc:
@@ -731,13 +618,7 @@ class MacroLTVEvaluator:
             
             # Create a copy of the document for re-evaluation with the corrected content
             eval_doc = original_doc.copy()
-            
-            # For LTV, use the corrected_agent_response field instead of original agent_response
-            if "corrected_agent_response" in eval_doc:
-                eval_doc["agent_response"] = eval_doc["corrected_agent_response"]
-            
-            # Re-evaluate the corrected document
-            evaluation = await self.evaluate_document(eval_doc)
+            evaluation = await self.evaluate_document(eval_doc, corrected = True)
             
             # Mark as corrected evaluation
             evaluation["is_correction"] = True
@@ -747,15 +628,15 @@ class MacroLTVEvaluator:
             
         except Exception as e:
             return {"error": f"Re-evaluation failed: {str(e)}"}
-
+    
     async def update_evaluation_document(self, eval_id: str, 
-                                    re_evaluation: Dict[str, Any]) -> bool:
+                                      re_evaluation: Dict[str, Any]) -> bool:
         """Update the evaluation document with the corrected evaluation."""
         try:
             update_result = await self.eval_collection.update_one(
                 {"_id": ObjectId(eval_id)},
                 {"$set": {
-                    "corrected": True,
+                    "with_corrections": True,
                     "corrected_evaluation": re_evaluation.get("evaluation"),
                     "corrected_evaluated_at": re_evaluation.get("evaluated_at")
                 }}
@@ -766,12 +647,12 @@ class MacroLTVEvaluator:
         except Exception as e:
             print(f"Error updating evaluation document: {e}")
             return False
-
+    
     async def process_corrections(self, start_date: datetime, end_date: datetime):
         """Process corrections for documents that failed hallucination checks in parallel batches."""
-        # Get failed LTV evaluations
+        # Get failed TICKER-PULSE evaluations
         failures = await self.find_failed_hallucination_checks(start_date, end_date)
-        print(f"Found {len(failures)} LTV documents requiring correction")
+        print(f"Found {len(failures)} TICKER-PULSE documents requiring correction")
         
         if not failures:
             return {"corrections_processed": 0}
@@ -843,13 +724,12 @@ class MacroLTVEvaluator:
             "corrections_failed": len(failures) - successes
         }
 
-
 async def main():
     end_dt   = datetime.now(timezone.utc)
     start_dt = end_dt - timedelta(days=3)
-
-    evaluator = MacroLTVEvaluator(MONGO_URI, daily_sample_size=EVAL_SAMPLE_SIZE)
-    summary   = await evaluator.process_date_range(start_dt, end_dt)
+    
+    evaluator = TickerPulseEvaluator(MONGO_URI)
+    summary = await evaluator.process_corrections(start_dt, end_dt)
     print("Evaluation summary:", summary)
 
 if __name__ == "__main__":

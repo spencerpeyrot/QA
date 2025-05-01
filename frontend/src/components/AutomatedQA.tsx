@@ -16,6 +16,12 @@ interface PipelineData {
 
 // Dummy data
 const PIPELINE_DATA: PipelineData = {
+  'Home Page': {
+    'Ticker Pulse': {
+      status: 'completed',
+      lastRun: '2024-04-22 16:45:00'
+    }
+  },
   'Agent S': {
     'Main': {
       status: 'completed',
@@ -210,10 +216,13 @@ export function AutomatedQA() {
       setPipelineStatus('running');
       setActiveRuns(prev => ({ ...prev, [runKey]: true }));
 
-      // Only run if it's Agent M - Long Term View for now
+      // Handle different pipeline types
       if (agent === 'Agent M' && subComponent === 'Long Term View') {
         const response = await pipelineApi.runLTVPipeline(agent, subComponent);
-        console.log('Pipeline run response:', response);
+        console.log('LTV Pipeline run response:', response);
+      } else if (agent === 'Home Page' && subComponent === 'Ticker Pulse') {
+        const response = await pipelineApi.runTickerPulsePipeline(agent, subComponent);
+        console.log('Ticker Pulse Pipeline run response:', response);
       } else {
         throw new Error('This pipeline is not yet implemented');
       }
