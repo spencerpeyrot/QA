@@ -43,7 +43,7 @@ const REQUIRED_VARIABLES: RequiredVariables = {
   'Agent O': {
     'Flow Analysis': ['current_date', 'ticker', 'current_price', 'report_text'],
     'Volatility Analysis': ['current_date', 'ticker', 'current_price', 'report_text'],
-    'Consolidated Analysis': ['current_date', 'ticker', 'current_price', 'report_text']
+    'Consolidated Analysis': ['current_date', 'ticker', 'current_price', 'flow_analysis', 'volatility_analysis', 'report_text']
   },
   'Agent E': {
     'EPS/Revenue Analysis': ['current_date', 'ticker', 'report_text'],
@@ -82,7 +82,9 @@ const getFieldLabel = (field: string): string => {
     td_q_report: 'Agent Q Report',
     q_standalone_report: 'Q Standalone Report',
     td_o_report: 'Agent O Report',
-    o_standalone_report: 'O Standalone Report'
+    o_standalone_report: 'O Standalone Report',
+    flow_analysis: 'Flow Analysis Report',
+    volatility_analysis: 'Volatility Analysis Report'
   };
   return labels[field] || field.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
@@ -93,6 +95,15 @@ export function ReportVariables({ agent, subComponent, onVariablesChange, onRunQ
   // Get the required variables for the current agent/sub-component
   const requiredVars = REQUIRED_VARIABLES[agent as keyof RequiredVariables]?.[subComponent] || [];
   
+  // Helper function to get field label based on context
+  const getContextualFieldLabel = (field: string) => {
+    // Special case for Agent O Consolidated Analysis report_text
+    if (agent === 'Agent O' && subComponent === 'Consolidated Analysis' && field === 'report_text') {
+      return 'Combined Analysis';
+    }
+    return getFieldLabel(field);
+  };
+
   // Reset variables when agent or sub-component changes
   useEffect(() => {
     const newVariables: Record<string, string> = {};
@@ -127,15 +138,15 @@ export function ReportVariables({ agent, subComponent, onVariablesChange, onRunQ
               htmlFor={field}
               className="block text-sm font-medium text-(--color-neutral-100)"
             >
-              {getFieldLabel(field)}:
+              {getContextualFieldLabel(field)}:
             </label>
-            {field.includes('report') || field === 'market_recap' || field === 'market_thesis' ? (
+            {field.includes('report') || field === 'market_recap' || field === 'market_thesis' || field.includes('analysis') ? (
               <textarea
                 id={field}
                 value={variables[field] || ''}
                 onChange={(e) => handleInputChange(field, e.target.value)}
                 className="w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) min-h-[100px]"
-                placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
+                placeholder={`Enter ${getContextualFieldLabel(field).toLowerCase()}...`}
                 disabled={isLoading}
               />
             ) : (
@@ -146,7 +157,7 @@ export function ReportVariables({ agent, subComponent, onVariablesChange, onRunQ
                 onChange={(e) => handleInputChange(field, e.target.value)}
                 className={`w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent)
                   ${(field === 'current_date' || field === 'prev_trading_day') ? '[color-scheme:dark]' : ''}`}
-                placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
+                placeholder={`Enter ${getContextualFieldLabel(field).toLowerCase()}...`}
                 disabled={isLoading}
               />
             )}

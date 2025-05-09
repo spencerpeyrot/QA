@@ -78,6 +78,12 @@ async def create_qa_evaluation(request: QARequest):
         template = prompt_manager.load_prompt(request.agent, request.sub_component)
         formatted_prompt = prompt_manager.format_prompt(template, request.variables)
         
+        # Log the prompt we're about to send
+        logger.info("Preparing OpenAI API call with prompt:")
+        logger.info("-" * 80)
+        logger.info(formatted_prompt)
+        logger.info("-" * 80)
+        
         max_retries = len(key_manager.api_keys)
         retry_count = 0
         
@@ -86,11 +92,10 @@ async def create_qa_evaluation(request: QARequest):
                 # Get current OpenAI client
                 openai_client = key_manager.get_client()
                 
-                # Call OpenAI
+                # Call OpenAI with the formatted prompt
                 response = await openai_client.chat.completions.create(
                     model=os.getenv("DEFAULT_MODEL", "gpt-4o-mini-search-preview-2025-03-11"),
                     messages=[
-                        {"role": "system", "content": "You are a financial analysis QA expert. Your task is to evaluate the quality and accuracy of financial analysis reports."},
                         {"role": "user", "content": formatted_prompt}
                     ],
                     stream=True

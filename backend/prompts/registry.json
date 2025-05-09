@@ -38,7 +38,7 @@
       "variables": ["current_date", "ticker", "current_price", "report_text"]
     },
     "Consolidated Analysis": {
-      "variables": ["current_date", "ticker", "current_price", "report_text"]
+      "variables": ["current_date", "ticker", "current_price", "flow_analysis", "volatility_analysis", "report_text"]
     }
   },
   "Agent E": {
