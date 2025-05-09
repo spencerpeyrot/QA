@@ -22,6 +22,12 @@ const PIPELINE_DATA: PipelineData = {
       lastRun: '2024-04-22 16:45:00'
     }
   },
+  'Silver Bullets': {
+    'Evaluation': {
+      status: 'completed',
+      lastRun: '2024-04-22 16:30:00'
+    }
+  },
   'Agent S': {
     'Main': {
       status: 'completed',
@@ -184,8 +190,23 @@ export function AutomatedQA() {
 
     const pollStatus = async () => {
       try {
-        const status = await pipelineApi.getPipelineStatus();
-        if (status.status === 'completed' || status.status === 'failed') {
+        let status;
+        // Check status based on active pipeline
+        const activeRun = Object.entries(activeRuns).find(([_, isRunning]) => isRunning);
+        if (activeRun) {
+          const [key] = activeRun;
+          const [agent, subComponent] = key.split('-');
+          
+          if (agent === 'Agent M' && subComponent === 'Long Term View') {
+            status = await pipelineApi.getLTVPipelineStatus();
+          } else if (agent === 'Home Page' && subComponent === 'Ticker Pulse') {
+            status = await pipelineApi.getTickerPulsePipelineStatus();
+          } else if (agent === 'Silver Bullets') {
+            status = await pipelineApi.getSLVBPipelineStatus();
+          }
+        }
+
+        if (status?.status === 'completed' || status?.status === 'failed') {
           setActiveRuns({});
           setPipelineStatus(status.status);
           if (status.error) {
@@ -223,6 +244,9 @@ export function AutomatedQA() {
       } else if (agent === 'Home Page' && subComponent === 'Ticker Pulse') {
         const response = await pipelineApi.runTickerPulsePipeline(agent, subComponent);
         console.log('Ticker Pulse Pipeline run response:', response);
+      } else if (agent === 'Silver Bullets') {
+        const response = await pipelineApi.runSLVBPipeline(agent, subComponent);
+        console.log('SLVB Pipeline run response:', response);
       } else {
         throw new Error('This pipeline is not yet implemented');
       }

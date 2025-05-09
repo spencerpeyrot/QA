@@ -10,6 +10,7 @@ import asyncio
 from itertools import islice
 from bson import ObjectId
 import os
+import re
 
 OPENAI_API_KEY=os.getenv("OPENAI_API_KEY")
 OPENAI_API_KEY_BACKUP1=os.getenv("OPENAI_API_KEY_BACKUP1")
@@ -174,8 +175,6 @@ class TickerPulseEvaluator:
 
     async def evaluate_document(self, doc: Dict[str, Any], corrected: bool = False) -> Dict[str, Any]:
         """Submit document to LLM for evaluation using function calling."""
-        # Define the function schema
-
         # Create user prompt with context
         response_doc = doc.get("agent_response", {})
         if not corrected:
@@ -188,12 +187,35 @@ class TickerPulseEvaluator:
         print(f'Processing ticker pulse output for {ticker}')
         headline = response_doc.get("headline", "")
         
+        # Extract all citation numbers from the response
+        citations = set(re.findall(r'\[(\d+)\]', ticker_response))
+        print(f"Citations found in response: {citations}")
+        
         # Extract and format source documents
         source_docs = response_doc.get("source_docs", {})
         source_texts = []
+        
+        # Verify citations against available sources
+        available_sources = set(source_docs.keys())
+        print(f"Available sources: {available_sources}")
+        
+        # Check for missing citations
+        missing_citations = citations - available_sources
+        if missing_citations:
+            print(f"WARNING: Citations referenced but not found in sources: {missing_citations}")
+        
+        # Check for unused sources
+        unused_sources = available_sources - citations
+        if unused_sources:
+            print(f"INFO: Sources available but not cited: {unused_sources}")
+        
+        # Format sources and verify text field
         for key, value in source_docs.items():
-            if "text" in value:
-                source_texts.append(f"Source [{key}]: {value['text']}...")
+            if "text" not in value:
+                print(f"WARNING: Source [{key}] missing 'text' field")
+                continue
+                
+            source_texts.append(f"Source [{key}]: {value['text']}")
         
         source_docs_formatted = "\n\n".join(source_texts)
         
