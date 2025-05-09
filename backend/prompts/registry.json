@@ -2,6 +2,11 @@
   "Agent S": {
     "variables": ["current_date", "question", "report_text"]
   },
+  "Home Page": {
+    "Ticker Pulse": {
+      "variables": ["current_date", "ticker", "gainer_laggard", "report_text"]
+    }
+  },
   "Agent M": {
     "Long Term View": {
       "variables": ["current_date", "category", "report_text"]

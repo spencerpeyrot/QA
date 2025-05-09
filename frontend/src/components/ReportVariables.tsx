@@ -15,6 +15,7 @@ type AgentConfig = {
 };
 
 type RequiredVariables = {
+  'Home Page': AgentConfig;
   'Agent S': AgentConfig;
   'Agent M': AgentConfig;
   'Agent Q': AgentConfig;
@@ -25,6 +26,9 @@ type RequiredVariables = {
 
 // Define the variables required for each agent/sub-component combination
 const REQUIRED_VARIABLES: RequiredVariables = {
+  'Home Page': {
+    'Ticker Pulse': ['current_date', 'ticker', 'gainer_laggard', 'report_text']
+  },
   'Agent S': {
     '': ['current_date', 'question', 'report_text']
   },
@@ -84,7 +88,8 @@ const getFieldLabel = (field: string): string => {
     td_o_report: 'Agent O Report',
     o_standalone_report: 'O Standalone Report',
     flow_analysis: 'Flow Analysis Report',
-    volatility_analysis: 'Volatility Analysis Report'
+    volatility_analysis: 'Volatility Analysis Report',
+    gainer_laggard: 'Classification'
   };
   return labels[field] || field.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
@@ -149,6 +154,18 @@ export function ReportVariables({ agent, subComponent, onVariablesChange, onRunQ
                 placeholder={`Enter ${getContextualFieldLabel(field).toLowerCase()}...`}
                 disabled={isLoading}
               />
+            ) : field === 'gainer_laggard' ? (
+              <select
+                id={field}
+                value={variables[field] || ''}
+                onChange={(e) => handleInputChange(field, e.target.value)}
+                className="w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) appearance-none cursor-pointer"
+                disabled={isLoading}
+              >
+                <option value="">Select classification...</option>
+                <option value="Gainer">Gainer</option>
+                <option value="Laggard">Laggard</option>
+              </select>
             ) : (
               <input
                 type={field === 'current_date' || field === 'prev_trading_day' ? 'date' : field.includes('price') ? 'number' : 'text'}

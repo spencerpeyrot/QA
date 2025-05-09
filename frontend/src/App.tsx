@@ -7,6 +7,9 @@ import AutomatedAnalytics from './components/AutomatedAnalytics'
 import { qaApi } from './services/api'
 
 const AGENT_SUBCOMPONENTS = {
+  'Home Page': [
+    'Ticker Pulse'
+  ],
   'Agent S': [], // Agent S has no sub-components
   'Agent M': [
     'Long Term View',
@@ -132,9 +135,12 @@ function App() {
         created_at: new Date().toISOString()
       });
 
+      // Map Home Page to the correct agent name for the backend
+      const mappedAgent = selectedAgent;  // No need to map anymore, use as is
+
       // Format the request data to match backend expectations
       const requestData = {
-        agent: selectedAgent,
+        agent: mappedAgent,
         sub_component: selectedSubComponent || '', // Empty string instead of undefined
         variables: {
           ...variables,
@@ -241,7 +247,7 @@ function App() {
 
       // Use the same request data from the previous run
       const requestData = {
-        agent: qaRun.agent,
+        agent: qaRun.agent,  // No need to map anymore, use as is
         sub_component: qaRun.sub_component || '',
         variables: qaRun.variables
       };
@@ -419,6 +425,7 @@ function App() {
                         className="w-full rounded-md border border-[#2A2E39] bg-(--color-background) px-3 py-2 text-(--color-neutral-100) focus:outline-none focus:border-(--color-accent) appearance-none cursor-pointer"
                       >
                         <option value="" className="bg-(--color-background)">Select an agent...</option>
+                        <option value="Home Page" className="bg-(--color-background)">Home Page</option>
                         <option value="Agent S" className="bg-(--color-background)">Agent S</option>
                         <option value="Agent M" className="bg-(--color-background)">Agent M</option>
                         <option value="Agent Q" className="bg-(--color-background)">Agent Q</option>

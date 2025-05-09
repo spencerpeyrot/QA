@@ -54,7 +54,14 @@ class PromptManager:
                 detail=f"Unknown sub-component {sub_component} for agent {agent}"
             )
             
-        return self.registry[agent][sub_component]["variables"]
+        # Handle nested subcomponents with variables
+        if "variables" in self.registry[agent][sub_component]:
+            return self.registry[agent][sub_component]["variables"]
+            
+        raise HTTPException(
+            status_code=400,
+            detail=f"No variables defined for agent {agent} and sub-component {sub_component}"
+        )
     
     def load_prompt(self, agent: str, sub_component: Optional[str]) -> str:
         """Load and return the prompt template for the given agent/sub-component."""
