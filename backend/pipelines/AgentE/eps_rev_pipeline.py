@@ -17,6 +17,14 @@ from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 from pathlib import Path
 
+from ..helpers import (
+    get_mongo_client,
+    get_openai_client,
+    setup_logger,
+    aggregate_evaluation_stats,
+    calculate_final_pass_rates
+)
+
 # Load .env file
 env_path = Path(__file__).resolve().parents[2] / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -28,27 +36,24 @@ from tqdm.asyncio import tqdm_asyncio
 import pandas_market_calendars as mcal
 
 # ----------  logging  ---------- #
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-    level=logging.INFO
+log = setup_logger(
+    "EPSREV",
+    level=logging.DEBUG,
+    fmt="%(asctime)s [%(levelname)s] %(message)s", # Match original format
+    datefmt="%H:%M:%S", # Match original datefmt
+    noisy_loggers_to_warn=["motor", "pymongo", "httpcore", "httpx", "openai", "asyncio", "anyio"]
 )
-log = logging.getLogger("EPSREV")
-log.setLevel(logging.DEBUG)
-
-for noisy in ("motor", "pymongo", "httpcore", "httpx", "openai", "asyncio", "anyio"):
-    logging.getLogger(noisy).setLevel(logging.WARNING)
 
 # --------------------------------------------------------------------- #
 # ENV / CONFIG
 # --------------------------------------------------------------------- #
-OPENAI_API_KEYS = [
-    k for k in (
-        os.getenv("OPENAI_API_KEY"),
-        os.getenv("OPENAI_API_KEY_BACKUP1"),
-        os.getenv("OPENAI_API_KEY_BACKUP2"),
-    ) if k
-]
+# OPENAI_API_KEYS = [
+#     k for k in (
+#         os.getenv("OPENAI_API_KEY"),
+#         os.getenv("OPENAI_API_KEY_BACKUP1"),
+#         os.getenv("OPENAI_API_KEY_BACKUP2"),
+#     ) if k
+# ]
 MONGO_URI      = os.getenv("EVAL_MONGO_URI", "")
 OPENAI_MODEL   = os.getenv("OPENAI_MODEL", "o4-mini")
 DAILY_SAMPLE_SIZE = int(os.getenv("DAILY_SAMPLE_SIZE", 1))
@@ -165,8 +170,10 @@ class EPSRevEvaluator:
     def __init__(self, mongo_uri: str):
         if not mongo_uri:
             raise ValueError("EVAL_MONGO_URI env var not set")
-        cli = AsyncIOMotorClient(mongo_uri, tls=True, tlsAllowInvalidCertificates=True)
-        db  = cli["asc-fin-data"]
+        # cli = AsyncIOMotorClient(mongo_uri, tls=True, tlsAllowInvalidCertificates=True)
+        # db  = cli["asc-fin-data"]
+        client = get_mongo_client(mongo_uri)
+        db = client["asc-fin-data"]
         self.src  = db["user_activities"]
         self.eval = db[EVAL_COLL_NAME]
 
@@ -271,7 +278,8 @@ Be objective and thorough."""
 
             log.info("Evaluation prompt length for %s: %d chars", doc.get("user_question", "N/A"), len(user_prompt))
             # Make LLM call
-            client = AsyncOpenAI(api_key=random.choice(OPENAI_API_KEYS))
+            # client = AsyncOpenAI(api_key=random.choice(OPENAI_API_KEYS))
+            client = await get_openai_client()
             response = await client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
@@ -319,10 +327,10 @@ Be objective and thorough."""
     async def process_range(self, start: datetime, end: datetime) -> Dict[str, Any]:
         """Process all documents within a date range."""
         results = {
-            "factual_accuracy_pass_rate": 0,
-            "completeness_pass_rate": 0,
-            "quality_usefulness_pass_rate": 0,
-            "hallucination_free_rate": 0,
+            # "factual_accuracy_pass_rate": 0, # Will be added by helper as factual_pass_rate
+            # "completeness_pass_rate": 0, # Will be added by helper
+            # "quality_usefulness_pass_rate": 0, # Will be added by helper as quality_pass_rate
+            # "hallucination_free_rate": 0, # Will be added by helper
             "quality_scores": [],
             "documents_evaluated": 0,
             "documents_failed": 0,
@@ -336,8 +344,15 @@ Be objective and thorough."""
             "quality_total_count": 0,
             "hallucination_free_count": 0,
             "hallucination_total_count": 0
+            # "avg_quality_score": 0 # Will be added by helper
         }
         
+        criteria_mapping = {
+            "factual": ["factual_criteria.accurate_numbers", "factual_criteria.correct_citations"],
+            "completeness": ["completeness_criteria.paragraphs_all_supported", "completeness_criteria.predictive_section_present"],
+            "quality": ["quality_criteria.clear_structure", "quality_criteria.predictive_section_consistent"]
+        }
+
         # Get NYSE calendar for market day checks
         nyse = mcal.get_calendar('NYSE')
         days = set(d.date() for d in nyse.valid_days(start, end))
@@ -384,57 +399,61 @@ Be objective and thorough."""
             
             # Process results
             for evaluation in all_evaluations:
-                if "error" in evaluation:
-                    results["documents_failed"] += 1
+                if "error" in evaluation or not evaluation.get("evaluation"):
+                    results["documents_failed"] = results.get("documents_failed", 0) + 1
                     continue
                     
-                eval_data = evaluation.get("evaluation", {})
-                if not eval_data:
-                    results["documents_failed"] += 1
-                    continue
+                eval_data = evaluation["evaluation"] # evaluation.get("evaluation", {})
+                # if not eval_data: # Handled by check above and by helper
+                #     results["documents_failed"] += 1
+                #     continue
                 
-                # Count factual criteria
-                factual_criteria = eval_data.get("factual_criteria", {})
-                factual_true = sum(1 for _, v in factual_criteria.items() if v)
-                factual_total = len(factual_criteria)
-                
-                # Count completeness criteria
-                completeness_criteria = eval_data.get("completeness_criteria", {})
-                completeness_true = sum(1 for _, v in completeness_criteria.items() if v)
-                completeness_total = len(completeness_criteria)
-                
-                # Count quality criteria
-                quality_criteria = eval_data.get("quality_criteria", {})
-                quality_true = sum(1 for _, v in quality_criteria.items() if v)
-                quality_total = len(quality_criteria)
-                
-                # Track quality score
-                if "quality_score" in eval_data:
-                    results["quality_scores"].append(eval_data["quality_score"])
-                
-                # Track hallucination
-                if eval_data.get("hallucination_free", False):
-                    results["hallucination_free_count"] += 1
-                
-                # Add to totals
-                results["factual_true_count"] += factual_true
-                results["factual_total_count"] += factual_total
-                results["completeness_true_count"] += completeness_true
-                results["completeness_total_count"] += completeness_total
-                results["quality_true_count"] += quality_true
-                results["quality_total_count"] += quality_total
-                results["hallucination_total_count"] += 1
-                results["documents_evaluated"] += 1
+                aggregate_evaluation_stats(eval_data, results, criteria_mapping)
+
+                # # Count factual criteria
+                # factual_criteria = eval_data.get("factual_criteria", {})
+                # factual_true = sum(1 for _, v in factual_criteria.items() if v)
+                # factual_total = len(factual_criteria)
+                # 
+                # # Count completeness criteria
+                # completeness_criteria = eval_data.get("completeness_criteria", {})
+                # completeness_true = sum(1 for _, v in completeness_criteria.items() if v)
+                # completeness_total = len(completeness_criteria)
+                # 
+                # # Count quality criteria
+                # quality_criteria = eval_data.get("quality_criteria", {})
+                # quality_true = sum(1 for _, v in quality_criteria.items() if v)
+                # quality_total = len(quality_criteria)
+                # 
+                # # Track quality score
+                # if "quality_score" in eval_data:
+                #     results["quality_scores"].append(eval_data["quality_score"])
+                # 
+                # # Track hallucination
+                # if eval_data.get("hallucination_free", False):
+                #     results["hallucination_free_count"] += 1
+                # 
+                # # Add to totals
+                # results["factual_true_count"] += factual_true
+                # results["factual_total_count"] += factual_total
+                # results["completeness_true_count"] += completeness_true
+                # results["completeness_total_count"] += completeness_total
+                # results["quality_true_count"] += quality_true
+                # results["quality_total_count"] += quality_total
+                # results["hallucination_total_count"] += 1
+                # results["documents_evaluated"] += 1 # Handled by aggregate_evaluation_stats
             
             cur = nxt
         
         # Calculate final rates
-        if results["documents_evaluated"] > 0:
-            results["factual_accuracy_pass_rate"] = (results["factual_true_count"] / results["factual_total_count"]) * 100 if results["factual_total_count"] > 0 else 0
-            results["completeness_pass_rate"] = (results["completeness_true_count"] / results["completeness_total_count"]) * 100 if results["completeness_total_count"] > 0 else 0
-            results["quality_usefulness_pass_rate"] = (results["quality_true_count"] / results["quality_total_count"]) * 100 if results["quality_total_count"] > 0 else 0
-            results["hallucination_free_rate"] = (results["hallucination_free_count"] / results["hallucination_total_count"]) * 100 if results["hallucination_total_count"] > 0 else 0
-            results["avg_quality_score"] = sum(results["quality_scores"]) / len(results["quality_scores"]) if results["quality_scores"] else 0
+        # if results["documents_evaluated"] > 0:
+        #     results["factual_accuracy_pass_rate"] = (results["factual_true_count"] / results["factual_total_count"]) * 100 if results["factual_total_count"] > 0 else 0
+        #     results["completeness_pass_rate"] = (results["completeness_true_count"] / results["completeness_total_count"]) * 100 if results["completeness_total_count"] > 0 else 0
+        #     results["quality_usefulness_pass_rate"] = (results["quality_true_count"] / results["quality_total_count"]) * 100 if results["quality_total_count"] > 0 else 0
+        #     results["hallucination_free_rate"] = (results["hallucination_free_count"] / results["hallucination_total_count"]) * 100 if results["hallucination_total_count"] > 0 else 0
+        #     results["avg_quality_score"] = sum(results["quality_scores"]) / len(results["quality_scores"]) if results["quality_scores"] else 0
+        categories_for_pass_rates = ["factual", "completeness", "quality"]
+        calculate_final_pass_rates(results, categories_for_pass_rates)
         
         return results
 
@@ -578,7 +597,8 @@ CORRECTED REPORT:"""
         try:
             log.info("Correction prompt length for %s: %d chars", base["user_question"], len(user_prompt))
             # Make LLM call for correction
-            client = AsyncOpenAI(api_key=random.choice(OPENAI_API_KEYS))
+            # client = AsyncOpenAI(api_key=random.choice(OPENAI_API_KEYS))
+            client = await get_openai_client()
             response = await client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
