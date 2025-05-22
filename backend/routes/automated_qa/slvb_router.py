@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional
 import logging
 
-from pipelines.slvb_pipeline import SLVBTickerEvaluator, MONGO_URI
+from backend.pipelines.SLVB.slvb_pipeline import SLVBTickerEvaluator, MONGO_URI
 
 # Configure logging
 logger = logging.getLogger(__name__)

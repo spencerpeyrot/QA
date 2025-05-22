@@ -15,7 +15,7 @@ If any claim cannot be verified, or if any section is rated *Satisfactory* or *P
 
 ## Evaluation Criteria
 
-### 1 Contextual Relevance & Coherence
+### 1 Contextual Relevance & Coherence
 **Scope Alignment**
 * Confirm the report directly addresses **{{ category }}**.
 * Ensure it stays on-topic and uses appropriate long-term economic / market-analysis language.
@@ -35,14 +35,67 @@ If any claim cannot be verified, or if any section is rated *Satisfactory* or *P
 
 ---
 
-### 2 Factual Accuracy (with 90-day recency rule)  
+### 2 Factual Accuracy (with 90-day recency rule)  
 **Verification Steps**  
 For **every fact-based statement** (metrics, events, dates, quotes, stats):  
 
 1. Search for a credible source (official data, reputable research, authoritative news).  
 2. Confirm the source was **published within 90 days** of **{{current_date}}**.  
-3. Enter the claim, the source URL, and whether the source is ≤90 days old in the Fact-Check Table.  
-4. If no credible ≤90-day source exists, mark the Source URL **UNVERIFIED / OUTDATED** and flag the claim.
+3. Enter the claim, the COMPLETE source URL (never shortened), the exact supporting snippet from the source, and whether the source is ≤90 days old in the Fact-Check Table.  
+4. If no credible ≤90-day source exists, mark the Source URL as **UNVERIFIED / OUTDATED** and flag the claim.
+
+**Source Verification Rules**
+* NEVER shorten or simplify URLs - always use the complete source URL including query parameters
+* Each claim MUST be individually verified by finding the exact text, numbers, or clear paraphrase in the source
+* For each claim:
+  1. First, fetch and read the full source document
+  2. Search for the specific numbers, phrases, or facts from your claim
+  3. Copy the exact supporting text (1-2 sentences) that proves the claim
+  4. Only mark as verified if you find explicit support - do not infer or extrapolate
+* If a source contains multiple claims:
+  - You may cite it multiple times, but you MUST provide different supporting snippets for each claim
+  - Each snippet must directly support its specific claim
+  - If you can't find explicit support for a claim, mark it UNVERIFIED even if the source discusses the general topic
+* Supporting snippets must:
+  - Contain the exact numbers/facts claimed or a clear equivalent
+  - Be copied verbatim from the source
+  - Include enough context to verify the claim (up to 3 sentences if needed)
+  - Not require inference or assumptions to support the claim
+
+**CRITICAL VERIFICATION REQUIREMENTS**
+You MUST mark a claim as UNVERIFIED if ANY of these conditions are true:
+1. The supporting snippet does not contain the EXACT numbers/statistics claimed
+2. The supporting snippet is being reused for a different claim without containing new supporting evidence
+3. The claim requires combining multiple pieces of information that aren't explicitly connected in the source
+4. You have to make ANY assumptions or inferences to connect the snippet to the claim
+5. The source discusses the general topic but doesn't explicitly state the specific claim
+
+**Examples of INVALID Verification:**
+❌ Claim: "Unemployment is 4.2%"
+   Snippet: "Consumer prices rose 0.2% in April"
+   Why: Snippet doesn't mention unemployment
+
+❌ Claim: "GDP grew 2.5% in Q2"
+   Snippet: "The economy showed strong performance in Q2"
+   Why: Snippet doesn't contain the specific number
+
+❌ Claim: "Retail sales increased 1.5%"
+   Snippet: "Consumer spending patterns changed"
+   Why: Snippet doesn't provide the specific statistic
+
+**Examples of VALID Verification:**
+✓ Claim: "Inflation rose 0.2% in April"
+   Snippet: "In April, inflation increased by 0.2% month-over-month"
+   Why: Exact number and fact match
+
+✓ Claim: "Fed kept rates at 4.25-4.50%"
+   Snippet: "The Federal Reserve maintained its benchmark interest rate range at 4.25% to 4.50%"
+   Why: Specific numbers and fact explicitly stated
+
+**Consequences of Non-Compliance:**
+* If you mark a claim as verified without an exactly matching snippet, your evaluation will be rejected
+* If you reuse a snippet for multiple claims without it containing distinct support for each claim, your evaluation will be rejected
+* If you mark claims as verified based on inference rather than explicit evidence, your evaluation will be rejected
 
 **Internal Consistency**
 * Ensure facts do not contradict one another within the report.
@@ -59,7 +112,7 @@ For **every fact-based statement** (metrics, events, dates, quotes, stats):
 
 ---
 
-### 3 Completeness & Depth
+### 3 Completeness & Depth
 * Does the report comprehensively cover major long-term aspects of **{{ category }}** (economic indicators, policy impacts, industry trends, etc.)?
 * Is the analysis sufficiently detailed and insightful?
 
@@ -67,7 +120,7 @@ Use the same rating scale and flag rules as Section 1.
 
 ---
 
-### 4 Overall Quality & Presentation
+### 4 Overall Quality & Presentation
 * Clarity, readability, grammar, formatting.
 * Value and actionability of insights.
 
@@ -81,9 +134,16 @@ Use the same rating scale and flag rules as Section 1.
    Review **{{ category }}** and **{{ report_text }}** provided for today (**{{ current_date }}**).
 
 2. **Fact-Check Claims**
-   Build a **Fact-Check Table** with three columns: `#`, `Claim`, and `Source URL`, `≤90 Days? (Yes/No)`.
+   Build a **Fact-Check Table** with five columns: `#`, `Claim`, `Complete Source URL`, `Supporting Snippet`, `≤90 Days? (Yes/No/UNVERIFIED)`.
    * List *every* fact-based claim from *report_text*.
-   * Insert the verified URL in the Source URL column, or **UNVERIFIED** if none found.
+   * Insert the complete, unshortened URL in the Source URL column.
+   * Copy the exact text from the source that supports each claim into the Supporting Snippet column.
+   * Mark as UNVERIFIED if:
+     - You cannot find an explicit supporting snippet
+     - The snippet doesn't contain the exact numbers/facts claimed
+     - You're reusing a snippet that doesn't contain new supporting evidence
+     - The claim requires inference or assumptions
+   * For UNVERIFIED claims, write "NO EXPLICIT SUPPORT FOUND" in the Supporting Snippet column
 
 3. **Rate Each Criterion**
    Assign a rating (Excellent / Good / Satisfactory / Poor) and a concise justification referencing rows in the Fact-Check Table.
@@ -97,11 +157,11 @@ Use the same rating scale and flag rules as Section 1.
 
 ```markdown
 ### Fact-Check Table
-| # | Claim | Source URL | ≤90 Days? |
-|---|-------|-----------|-----------|
-| 1 | … | … | Yes / No |
-| 2 | … | … | Yes / No |
-| … | … | … | … |
+| # | Claim | Complete Source URL | Supporting Snippet | ≤90 Days? |
+|---|-------|-------------------|-------------------|-----------|
+| 1 | … | … | "exact quote from source" | Yes/No/UNVERIFIED |
+| 2 | … | … | "NO EXPLICIT SUPPORT FOUND" | UNVERIFIED |
+| … | … | … | … | … |
 
 ### Section 1 – Contextual Relevance & Coherence
 **Rating:**

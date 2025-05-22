@@ -5,7 +5,7 @@ import asyncio
 import logging
 import os
 
-from pipelines.tp_pipeline import TickerPulseEvaluator, MONGO_URI
+from backend.pipelines.Other.tp_pipeline import TickerPulseEvaluator, MONGO_URI
 
 # Configure logging
 logger = logging.getLogger(__name__)

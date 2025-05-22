@@ -298,6 +298,11 @@ class CallSummaryEvaluator:
 
             for doc in docs:
                 try:
+                    # Log the initial agent response for every processed document
+                    initial_response_snippet = (doc.get("agent_response", "")[:150] + "...") if doc.get("agent_response") else "N/A"
+                    log.info("Initial agent_response for %s (doc_id: %s, first 150 chars): %s",
+                             doc["user_question"], str(doc["_id"]), initial_response_snippet)
+
                     ev = await self.evaluate(doc)
                     await self.eval.insert_one(ev)
                     evaluated_docs.append({
@@ -423,9 +428,63 @@ class CallSummaryEvaluator:
                     log.error("Could not find evaluation for %s", doc["ticker"])
                     continue
 
+                # Log what was identified as wrong using the evaluation details
+                evaluation_details = eval_doc.get("evaluation", {})
+                if "error" in evaluation_details:
+                    log.info("Document %s (%s) flagged for correction due to evaluation error: %s",
+                             doc["ticker"], doc["doc_id"], evaluation_details["error"])
+                else:
+                    wrong_items = []
+                    # Factual Criteria
+                    fc = evaluation_details.get("factual_criteria", {})
+                    if not fc.get("numbers_match_transcript", True): wrong_items.append("Numbers don't match transcript")
+                    if not fc.get("statements_supported", True): wrong_items.append("Statements not supported")
+                    
+                    # Completeness Criteria
+                    cc = evaluation_details.get("completeness_criteria", {})
+                    if not cc.get("covers_key_points", True): wrong_items.append("Doesn't cover key points")
+                    if not cc.get("includes_context", True): wrong_items.append("Lacks context")
+
+                    # Quality Criteria
+                    qc = evaluation_details.get("quality_criteria", {})
+                    if not qc.get("clear_structure", True): wrong_items.append("Unclear structure")
+                    if not qc.get("professional_tone", True): wrong_items.append("Unprofessional tone")
+
+                    # Hallucinations
+                    if not evaluation_details.get("hallucination_free", True):
+                        wrong_items.append("Contains hallucinations")
+                        unsupported_claims = evaluation_details.get("unsupported_claims", [])
+                        if unsupported_claims:
+                            wrong_items.append(f"Unsupported claims: {', '.join(unsupported_claims)}")
+                    
+                    if wrong_items:
+                         log.info("Document %s (%s) identified issues for correction: %s", 
+                                  doc["ticker"], doc["doc_id"], "; ".join(wrong_items))
+                    elif not doc["needs_correction"]: # Should not happen if logic is sound, but as a fallback
+                         log.info("Document %s (%s) needs correction but no specific issues logged.", doc["ticker"], doc["doc_id"])
+
+
                 res = await self.correct(eval_doc)
                 if res.get("corrected"):
+                    corrected_text_snippet = (res.get("corrected_text", "")[:150] + "...") if res.get("corrected_text") else "N/A"
+                    log.info("Correction attempt for %s generated text (first 150 chars): %s", 
+                             doc["ticker"], corrected_text_snippet)
+                    
                     reval = await self.evaluate(original_doc, corrected=True)
+                    
+                    # Log the updated analysis
+                    reval_eval = reval.get("evaluation", {})
+                    if "error" in reval_eval:
+                        log.info("Re-evaluation for %s after correction resulted in an error: %s", 
+                                 doc["ticker"], reval_eval["error"])
+                    else:
+                        reval_score = reval_eval.get('quality_score', 'N/A')
+                        reval_hallu = reval_eval.get('hallucination_free', 'N/A')
+                        reval_fact_nums = reval_eval.get('factual_criteria', {}).get('numbers_match_transcript', 'N/A')
+                        reval_fact_stmts = reval_eval.get('factual_criteria', {}).get('statements_supported', 'N/A')
+                        log.info("Re-evaluation for %s after correction: Score: %s, Hallucination Free: %s, Numbers Match: %s, Statements Supported: %s",
+                                 doc["ticker"], reval_score, reval_hallu, reval_fact_nums, reval_fact_stmts)
+
 
                     # TODO: Uncomment the following block when ready to enable automatic corrections in production
                     # This will update the evaluation document with correction metadata
@@ -447,7 +506,7 @@ class CallSummaryEvaluator:
 # --------------------------------------------------------------------- #
 async def main():
     end   = datetime.now(timezone.utc)
-    start = end - timedelta(days=2)
+    start = end - timedelta(days=1)
 
     ev = CallSummaryEvaluator(MONGO_URI)
     log.info("=== Evaluation pass ===")

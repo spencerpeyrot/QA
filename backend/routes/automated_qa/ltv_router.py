@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional
 import logging
 
-from pipelines.ltv_pipeline import MacroLTVEvaluator, MONGO_URI
+from backend.pipelines.AgentM.ltv_pipeline import MacroLTVEvaluator, MONGO_URI
 
 # Configure logging
 logger = logging.getLogger(__name__)
