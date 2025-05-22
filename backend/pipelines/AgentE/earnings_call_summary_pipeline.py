@@ -11,6 +11,9 @@ from typing import Dict, Any, List
 from dotenv import load_dotenv
 from pathlib import Path
 
+# Import helpers using relative path
+from ..helpers import get_mongo_client, get_openai_client, call_llm_with_function_call, split_text_into_items
+
 env_path = Path(__file__).resolve().parents[2] / '.env'
 load_dotenv(dotenv_path=env_path)
 
@@ -33,10 +36,11 @@ for v in ("motor", "pymongo", "httpcore", "httpx", "openai"):
 # --------------------------------------------------------------------- #
 # ENV / CONFIG
 # --------------------------------------------------------------------- #
-OPENAI_API_KEYS = [k for k in (
-    os.getenv("OPENAI_API_KEY"),
-    os.getenv("OPENAI_API_KEY_BACKUP1"),
-    os.getenv("OPENAI_API_KEY_BACKUP2")) if k]
+# OPENAI_API_KEYS will be removed as helpers.get_openai_client handles key selection.
+# OPENAI_API_KEYS = [k for k in (
+#     os.getenv("OPENAI_API_KEY"),
+#     os.getenv("OPENAI_API_KEY_BACKUP1"),
+#     os.getenv("OPENAI_API_KEY_BACKUP2")) if k]
 
 MONGO_URI         = os.getenv("EVAL_MONGO_URI", "")
 OPENAI_MODEL      = os.getenv("OPENAI_MODEL", "o4-mini")
@@ -45,7 +49,7 @@ DAILY_SAMPLE_SIZE = int(os.getenv("DAILY_SAMPLE_SIZE", 1))
 EVAL_COLL_NAME    = "evaluations"
 PIPELINE_TAG      = "CALL-SUM"
 
-TRANSCRIPT_CAP_CHARS = 51000
+TRANSCRIPT_CAP_CHARS = 70000
 
 # --------------------------------------------------------------------- #
 # Function-call schema
@@ -65,7 +69,7 @@ evaluation_schema = {
                     },
                     "statements_supported": {
                         "type": "boolean",
-                        "description": "True if all non-numeric statements in the summary are directly supported by the transcript content."
+                        "description": "True if all non-numeric statements *in the summary* are directly supported by or are reasonable inferences from the transcript content. Minor paraphrasing is acceptable."
                     }
                 },
                 "required": ["numbers_match_transcript", "statements_supported"]
@@ -75,11 +79,11 @@ evaluation_schema = {
                 "properties": {
                     "covers_key_points": {
                         "type": "boolean",
-                        "description": "True if the summary covers all major points discussed in the earnings call."
+                        "description": "True if the summary covers all major points discussed in the earnings call relevant to the summary's scope."
                     },
                     "includes_context": {
                         "type": "boolean",
-                        "description": "True if sufficient context is provided for each bullet point to understand its significance."
+                        "description": "True if sufficient context is provided *within the summary* for each bullet point to understand its significance based on transcript information."
                     }
                 },
                 "required": ["covers_key_points", "includes_context"]
@@ -100,7 +104,7 @@ evaluation_schema = {
             },
             "hallucination_free": {
                 "type": "boolean",
-                "description": "False if any bullet contains details or assertions not found in the transcript. Minor paraphrasing is allowed and does not count as hallucination."
+                "description": "True if the summary does not introduce substantive information, details, or assertions not found in or reasonably inferable from the transcript. Minor paraphrasing or summarization of transcript content, including slight variations in phrasing or context for otherwise supported numbers, is allowed and does not count as hallucination. False if the summary invents new facts or makes claims with no basis in the transcript."
             },
             "quality_score": {
                 "type": "integer",
@@ -124,7 +128,7 @@ evaluation_schema = {
             "unsupported_claims": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "List of any specific claims or figures in the summary that are not present in the transcript."
+                "description": "List specific claims or figures *present in the summary* that are substantively contradicted by the transcript or for which no clear supporting evidence can be found in the transcript. Do not list items here if they are minor paraphrases or slight numerical variations that are generally consistent with the transcript (these might affect 'numbers_match_transcript' but not necessarily 'unsupported_claims' or 'hallucination_free'). This field is for information *in the summary* that is demonstrably false or absent from the transcript."
             },
             "score_explanation": {
                 "type": "string",
@@ -149,18 +153,19 @@ evaluation_schema = {
 # --------------------------------------------------------------------- #
 para_re = re.compile(r"^- ", re.M)
 
-def split_bullets(text: str) -> List[str]:
-    """Return individual bullet blocks (keeps heading lines)."""
-    if not text:
-        return []
-    return [b.strip() for b in text.split("\n\n") if para_re.match(b.strip())]
+# split_bullets function will be removed and replaced by helpers.split_text_into_items
+# def split_bullets(text: str) -> List[str]:
+#     """Return individual bullet blocks (keeps heading lines)."""
+#     if not text:
+#         return []
+#     return [b.strip() for b in text.split("\n\n") if para_re.match(b.strip())]
 
 # --------------------------------------------------------------------- #
 class CallSummaryEvaluator:
     def __init__(self, mongo_uri: str):
         if not mongo_uri:
             raise ValueError("EVAL_MONGO_URI env var not set")
-        cli = AsyncIOMotorClient(mongo_uri, tls=True, tlsAllowInvalidCertificates=True)
+        cli = get_mongo_client(mongo_uri) # Use helper directly
         db  = cli["asc-fin-data"]
         self.src  = db["user_activities"]
         self.eval = db[EVAL_COLL_NAME]
@@ -171,8 +176,8 @@ class CallSummaryEvaluator:
             log.error("Empty summary text received")
             return ""
         
-        bullet_blocks = "\n\n".join(
-            f"BULLET:\n{b}" for b in split_bullets(summary)
+        bullet_blocks = "\\n".join(
+            f"BULLET:\\n{b}" for b in split_text_into_items(summary, item_separator="\\n\\n", item_start_regex=para_re) # Use helper directly
         ) or summary   # fallback if no bullets
 
         prompt = (
@@ -181,13 +186,13 @@ class CallSummaryEvaluator:
             "and evaluate numerical accuracy, statement support, and overall clarity. "
             "Note: it's acceptable for summaries to omit details; missing content should not be marked as an error. "
             "Only unsupported or hallucinated statements should count against the summary."
-            "\n\nSUMMARY:\n" +
+            "\\n\\nSUMMARY:\\n" +
             bullet_blocks +
-            "\n\nCALL TRANSCRIPT (excerpt, may be truncated):\n" +
-            transcript[:TRANSCRIPT_CAP_CHARS] +
-            "\n\nRespond using the evaluate_call_summary function."
+            "\\n\\nCALL TRANSCRIPT:\\n" + # Changed from CALL TRANSCRIPT (excerpt, may be truncated)
+            transcript + # Use full transcript
+            "\\n\\nRespond using the evaluate_call_summary function."
         )
-        log.debug("Prompt size ≈ %d chars", len(prompt))
+        log.debug("Prompt size for evaluation ≈ %d chars", len(prompt))
         return prompt
 
     # --------------------------- evaluate -------------------------- #
@@ -210,30 +215,55 @@ class CallSummaryEvaluator:
             }
 
         system_prompt = (
-            "You are an audit-grade earnings-call fact checker. "
-            "Compare the summary against the official transcript excerpt. "
-            "Allow summaries to omit content; missing details should not lower the score. "
-            "Only unsupported statements should be flagged as hallucinations. "
-            "Return results using the evaluation schema. "
-            "If all criteria (factual_criteria, completeness_criteria, quality_criteria) "
-            "are true and there are no hallucinations, the quality_score must be 100."
+            "You are an audit-grade earnings-call fact checker.\n"
+            "Your task is to evaluate the provided \"SUMMARY\" against the \"CALL TRANSCRIPT (excerpt)\".\n"
+            "Focus SOLELY on the claims and statements made *within the SUMMARY*.\n\n"
+            "Key Evaluation Points:\n"
+            "1.  **Factual Accuracy**: Verify if numbers and statements *in the SUMMARY* match the transcript.\n"
+            "2.  **Support**: Determine if claims *in the SUMMARY* are supported by the transcript.\n"
+            "3.  **Omissions are Allowed**: The SUMMARY is not expected to cover everything in the transcript. "
+            "Do NOT penalize the summary or list claims as \"unsupported\" if the summary simply omits information "
+            "present in the transcript. An \"unsupported claim\" is a piece of information *present in the summary* "
+            "that cannot be verified by the transcript.\n"
+            "4.  **Hallucinations**: A hallucination occurs if the SUMMARY introduces information or details that are NOT "
+            "found in the transcript. Minor paraphrasing of transcript content is acceptable and not a hallucination.\n"
+            "5.  **`unsupported_claims` Field**: Use this field ONLY to list specific sentences or data points "
+            "*from the SUMMARY* that you find are not supported by the transcript. Do not use this field to list items "
+            "*missing* from the summary that are present in the transcript.\n\n"
+            "Return your evaluation using the `evaluate_call_summary` function.\n"
+            "If all boolean criteria within `factual_criteria`, `completeness_criteria`, and `quality_criteria` are true, "
+            "AND `hallucination_free` is true, then `quality_score` MUST be 100."
         )
         user_prompt = self.build_prompt(summary, transcript)
 
-        client = AsyncOpenAI(api_key=random.choice(OPENAI_API_KEYS))
-        try:
-            llm = await client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                tools=[{"type": "function", "function": evaluation_schema}],
-                tool_choice={"type": "function", "function": {"name": "evaluate_call_summary"}}
-            )
-            ev = json.loads(llm.choices[0].message.tool_calls[0].function.arguments)
+        # Use helpers.call_llm_with_function_call
+        ev_result = await call_llm_with_function_call( # Use helper directly
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            function_schema=evaluation_schema,
+            openai_model=OPENAI_MODEL,
+            tool_choice={"type": "function", "function": {"name": "evaluate_call_summary"}},
+            temperature=1.0, # Set to 1.0 as required by o4-mini model
+            logger=log
+        )
+
+        if ev_result is None or "error" in ev_result:
+            error_detail = "Unknown LLM error" # Default if ev_result is None
+            if isinstance(ev_result, dict): # Check if ev_result is a dict before accessing keys
+                if "details" in ev_result:
+                    error_detail = ev_result["details"]
+                elif "function_name" in ev_result: 
+                    error_detail = f"Unexpected function called: {ev_result['function_name']}"
+                elif "error" in ev_result: 
+                    error_detail = str(ev_result.get("error", "Unknown LLM error")) # Use str representation of error value
             
-            # Force score to 100 if all criteria are true
+            log.error("LLM eval failed for %s: %s", doc["user_question"], error_detail)
+            ev = {"error": f"eval_error: {error_detail}"}
+        else:
+            ev = ev_result
+        
+        # Force score to 100 if all criteria are true - only if ev is not an error dict
+        if "error" not in ev:
             if (ev.get("hallucination_free", False) and
                 all(ev.get("factual_criteria", {}).values()) and
                 all(ev.get("completeness_criteria", {}).values()) and
@@ -243,9 +273,7 @@ class CallSummaryEvaluator:
                     ev["score_explanation"] = "Perfect score of 100 awarded as all evaluation criteria were met."
                     
             log.debug("Eval result for %s: %s", doc["user_question"], textwrap.shorten(json.dumps(ev), 200))
-        except Exception as e:
-            log.error("LLM eval failed for %s: %s", doc["user_question"], e)
-            ev = {"error": f"eval_error: {e}"}
+        # Removed old try-except for LLM call as it's handled by the helper and above logic
 
         return {
             "document_id": str(doc["_id"]),
@@ -299,9 +327,9 @@ class CallSummaryEvaluator:
             for doc in docs:
                 try:
                     # Log the initial agent response for every processed document
-                    initial_response_snippet = (doc.get("agent_response", "")[:150] + "...") if doc.get("agent_response") else "N/A"
-                    log.info("Initial agent_response for %s (doc_id: %s, first 150 chars): %s",
-                             doc["user_question"], str(doc["_id"]), initial_response_snippet)
+                    initial_response_full = doc.get("agent_response", "N/A")
+                    log.info("Initial agent_response for %s (doc_id: %s, full):\\n%s",
+                             doc["user_question"], str(doc["_id"]), initial_response_full)
 
                     ev = await self.evaluate(doc)
                     await self.eval.insert_one(ev)
@@ -364,18 +392,31 @@ class CallSummaryEvaluator:
                 instr.append(f"  • {claim}")
 
         transcript = base["agent_sources"].get("transcript", "")
-        system_corr = "You are an expert financial editor and fact checker."
+        system_corr = (
+            "You are an expert financial editor and fact checker. Your task is to meticulously correct the ORIGINAL SUMMARY.\n"
+            "**Critical Instructions - Adhere Strictly:**\n"
+            "1.  **Header Preservation**: The first two lines of the summary, specifically `### Earnings Call Summary ###` and the `Date: YYYY-MM-DD` line immediately following it, MUST be preserved VERBATIM from the ORIGINAL SUMMARY. These lines are NEVER to be considered for correction, alteration, or removal.\n"
+            "2.  **Minimal Changes Only**: Beyond the preserved header, make ONLY the changes necessary to address the specific issues listed in the \"TASK\". Do NOT rephrase, restructure, or alter any part of the report that is already correct or not mentioned in the \"TASK\".\n"
+            "3.  **Preserve Correct Content Verbatim**: If a statement, bullet point, sentence, or any part of the ORIGINAL SUMMARY (after the initial two header lines) is factually accurate, correctly cited, and does not pertain to a listed issue, it MUST be preserved EXACTLY AS IS in the corrected version. Do NOT omit, add, or reword it.\n"
+            "4.  **Maintain Original Formatting and Structure**: The CORRECTED SUMMARY MUST retain the exact same markdown formatting (e.g., `**Header**`, bullet points `- `), paragraphing, line breaks, and overall structure as the ORIGINAL SUMMARY for all content following the initial two header lines. Correct only the textual content of problematic elements as identified in the \"TASK\".\n"
+            "5.  **Focus Solely on the \"TASK\"**: Your corrections should exclusively target the problems detailed in the \"TASK\" section of the user prompt. Do not introduce new information or re-evaluate claims not listed in the \"TASK\".\n"
+            "6.  **Return Only Corrected Summary**: Provide only the full text of the corrected summary, ensuring it reflects all original formatting and structure, with targeted fixes applied according to these instructions."
+        )
         user_corr = (
             "ORIGINAL SUMMARY:\n" + base["agent_response"] +
-            "\n\nTRANSCRIPT EXCERPT:\n" + transcript[:TRANSCRIPT_CAP_CHARS] +
-            "\n\nTASK:\n" + "\n".join(instr) +
-            "\n\nINSTRUCTIONS:\n"
-            "1. Correct only the problematic bullets identified above.\n"
-            "2. Preserve the overall bullet structure and order.\n"
-            "3. Return only the corrected summary text."
+            "\\n\\nTRANSCRIPT:\n" + transcript +
+            "\\n\\nTASK:\nBased on a previous evaluation, the following issues were identified in the ORIGINAL SUMMARY. Correct them precisely:\n" + "\\n".join(instr) +
+            "\\n\\nINSTRUCTIONS FOR CORRECTION:\n"
+            "1.  Review each issue listed in the \"TASK\". Correct ONLY these specific issues within the ORIGINAL SUMMARY.\n"
+            "2.  **For any part of the ORIGINAL SUMMARY NOT listed as an issue: copy it VERBATIM to the CORRECTED SUMMARY, including all original markdown (bolding, headers, bullet styles, etc.) and line breaks.**\n"
+            "3.  If an issue involves an \"unsupported claim\", either correct the claim to match the TRANSCRIPT or remove the specific unsupported part of the claim. Ensure the correction is minimal.\n"
+            "4.  If an issue involves numerical inaccuracies, correct the numbers to match the TRANSCRIPT precisely.\n"
+            "5.  The final CORRECTED SUMMARY must mirror the ORIGINAL SUMMARY's formatting (headings, markdown, bullet points, paragraph structure) perfectly, with only the necessary textual corrections applied to address the \"TASK\".\n"
+            "6.  Return only the full text of the corrected summary."
         )
+        log.debug("Prompt size for correction ≈ %d chars", len(system_corr) + len(user_corr))
 
-        client = AsyncOpenAI(api_key=random.choice(OPENAI_API_KEYS))
+        client = await get_openai_client() # Use helper directly
         try:
             rsp = await client.chat.completions.create(
                 model=OPENAI_MODEL,
@@ -466,11 +507,16 @@ class CallSummaryEvaluator:
 
                 res = await self.correct(eval_doc)
                 if res.get("corrected"):
-                    corrected_text_snippet = (res.get("corrected_text", "")[:150] + "...") if res.get("corrected_text") else "N/A"
-                    log.info("Correction attempt for %s generated text (first 150 chars): %s", 
-                             doc["ticker"], corrected_text_snippet)
+                    corrected_text_full = res.get("corrected_text", "N/A")
+                    log.info("Correction attempt for %s generated text (full):\\n%s", 
+                             doc["ticker"], corrected_text_full)
                     
-                    reval = await self.evaluate(original_doc, corrected=True)
+                    # Create a temporary document for re-evaluation that includes the corrected text
+                    doc_for_re_eval = {
+                        **original_doc, # Carry over _id, user_question, timestamp, agent_sources etc.
+                        "agent_response_corrected": res.get("corrected_text") # Add the new corrected text
+                    }
+                    reval = await self.evaluate(doc_for_re_eval, corrected=True) # Pass the temporary doc
                     
                     # Log the updated analysis
                     reval_eval = reval.get("evaluation", {})
